@@ -1,0 +1,39 @@
+experiment:
+  name: "medium_non_iid"
+  seed: 42
+
+federation:
+  num_clients: 10
+  num_rounds: 30
+  fraction_fit: 1.0
+  anchor_fraction: 0.4       # 4 FP32 anchors, 6 quantized constrained
+
+client:
+  local_epochs: 2
+  local_lr: 0.01
+  local_momentum: 0.9
+  local_batch_size: 50
+  quantization_bits: [4, 8]  # mixed INT4/INT8 — realistic heterogeneity
+
+server:
+  correction_lr: 0.01
+  correction_epochs: 5
+  correction_hidden_dim: 256
+  validation_size: 500
+
+data:
+  dataset: "cifar10"
+  data_dir: "./data/raw"
+  alpha: 0.5                 # moderate non-IID (Dirichlet concentration)
+
+model:
+  arch: "cnn"
+
+loss:
+  reconstruction_weight: 1.0
+  distillation_weight: 1.0
+  distillation_temperature: 4.0
+
+metrics:
+  output_dir: "./results"
+  log_every_n_rounds: 1

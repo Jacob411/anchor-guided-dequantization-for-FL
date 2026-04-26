@@ -197,6 +197,21 @@ def run(args: argparse.Namespace) -> None:
             distill_weight = lcfg["distillation_weight"],
             temperature  = lcfg["distillation_temperature"],
             device       = device,
+            smart_match  = False,
+        )
+        strategy = OurStrategy(correction, similarity_weight=0.5)
+
+    elif strategy_name == "ours_smart":
+        correction = ServerCorrection(
+            delta_dim    = delta_dim,
+            hidden_dim   = scfg["correction_hidden_dim"],
+            lr           = scfg["correction_lr"],
+            epochs       = scfg["correction_epochs"],
+            rec_weight   = lcfg["reconstruction_weight"],
+            distill_weight = lcfg["distillation_weight"],
+            temperature  = lcfg["distillation_temperature"],
+            device       = device,
+            smart_match  = True,
         )
         strategy = OurStrategy(correction, similarity_weight=0.5)
 
@@ -246,8 +261,8 @@ def run(args: argparse.Namespace) -> None:
             quantized_deltas = quantized_deltas,
             global_state     = global_state,
             sample_counts    = sample_counts,
-            global_model     = global_model if strategy_name == "ours" else None,
-            val_loader       = val_loader   if strategy_name == "ours" else None,
+            global_model     = global_model if strategy_name in ("ours", "ours_smart") else None,
+            val_loader       = val_loader   if strategy_name in ("ours", "ours_smart") else None,
         )
         global_state = new_state
         global_model.load_state_dict({k: v.to(device) for k, v in global_state.items()})
@@ -283,7 +298,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Anchor-based Quantization FL Runner")
     parser.add_argument("--config",      type=str, default="configs/default.yaml")
     parser.add_argument("--strategy",   type=str, default="ours",
-                        choices=["ours", "fedavg", "fedshift", "prowd"],
+                        choices=["ours", "ours_smart", "fedavg", "fedshift", "prowd"],
                         help="Aggregation strategy to use")
     parser.add_argument("--rounds",     type=int, default=None, help="Override num_rounds")
     parser.add_argument("--num_clients",type=int, default=None, help="Override num_clients")

@@ -97,10 +97,12 @@ class ServerCorrection:
         device: torch.device | None = None,
         grad_clip: float = 1.0,
         buffer_size: int = 10,
+        smart_match: bool = False,
     ) -> None:
         self.device = device or torch.device("cpu")
         self.epochs = epochs
         self.grad_clip = grad_clip
+        self.smart_match = smart_match
 
         self.net = CorrectionNet(delta_dim, hidden_dim).to(self.device)
         self.optimizer = optim.Adam(self.net.parameters(), lr=lr)
@@ -110,7 +112,7 @@ class ServerCorrection:
         self._norm_mean: torch.Tensor | None = None
         self._norm_std:  torch.Tensor | None = None
 
-        # Replay buffer: list of (q_flat_batch, anchor_flat) tensors from past rounds.
+        # Replay buffer: list of (q_flat_batch, target_flat_batch) tensors from past rounds.
         # Capped at buffer_size rounds so memory stays bounded.
         self._buffer: List[Tuple[torch.Tensor, torch.Tensor]] = []
         self._buffer_size = buffer_size
@@ -143,27 +145,37 @@ class ServerCorrection:
         if not anchor_deltas or not quantized_deltas:
             return 0.0
 
-        # Build mean anchor target — learnable parameters only
-        anchor_flat = torch.stack(
+        # Build anchor targets and input batch — learnable parameters only
+        anchor_flats = torch.stack(
             [_flatten_delta_learnable(d) for d in anchor_deltas]
-        ).mean(dim=0).to(self.device)
-
-        # Build input batch from quantized deltas — learnable parameters only
+        ).to(self.device)
+        
         q_flat_batch = torch.stack(
             [_flatten_delta_learnable(d) for d in quantized_deltas]
         ).to(self.device)
 
+        if self.smart_match:
+            # Map each quantized delta to the most similar anchor
+            norm_q = torch.nn.functional.normalize(q_flat_batch, p=2, dim=1)
+            norm_a = torch.nn.functional.normalize(anchor_flats, p=2, dim=1)
+            sim = torch.mm(norm_q, norm_a.t())
+            best_anchor_idxs = torch.argmax(sim, dim=1)
+            target_flat_batch = anchor_flats[best_anchor_idxs]
+        else:
+            # Map all to the mean anchor
+            mean_anchor = anchor_flats.mean(dim=0)
+            target_flat_batch = mean_anchor.unsqueeze(0).expand(q_flat_batch.shape[0], -1)
+
         # ---- Replay buffer ---------------------------------------------------
-        # Accumulate (q_flat, anchor_flat) pairs across FL rounds so the net
+        # Accumulate (q_flat, target_flat) pairs across FL rounds so the net
         # sees increasing amounts of data and CorrLoss trends downward.
-        self._buffer.append((q_flat_batch.cpu(), anchor_flat.cpu()))
+        self._buffer.append((q_flat_batch.cpu(), target_flat_batch.cpu()))
         if len(self._buffer) > self._buffer_size:
             self._buffer.pop(0)  # evict oldest round
 
         # Concatenate all buffered rounds into one training batch
         all_q      = torch.cat([b[0] for b in self._buffer], dim=0).to(self.device)
-        all_anchor = torch.cat([b[1].unsqueeze(0).expand(b[0].shape[0], -1)
-                                for b in self._buffer], dim=0).to(self.device)
+        all_anchor = torch.cat([b[1] for b in self._buffer], dim=0).to(self.device)
         # ----------------------------------------------------------------------
 
         # ---- Input normalisation (global scalar z-score) --------------------
