@@ -14,6 +14,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from server.aggregator import fedavg, apply_delta
+from server.correction import _is_learnable_key
 
 
 class _DequantizerMLP(nn.Module):
@@ -51,15 +52,17 @@ class ProWDStrategy:
         lr: float = 1e-3,
         epochs: int = 5,
         device: torch.device | None = None,
+        grad_clip: float = 1.0,
     ) -> None:
         self.device = device or torch.device("cpu")
         self.epochs = epochs
+        self.grad_clip = grad_clip
         self.mlp = _DequantizerMLP(delta_dim, hidden_dim).to(self.device)
         self.optimizer = optim.Adam(self.mlp.parameters(), lr=lr)
         self.criterion = nn.MSELoss()
 
     def _flatten(self, delta: Dict[str, torch.Tensor]) -> torch.Tensor:
-        return torch.cat([t.float().flatten() for t in delta.values()])
+        return torch.cat([t.float().flatten() for k, t in delta.items() if _is_learnable_key(k)])
 
     def _unflatten(
         self, flat: torch.Tensor, ref: Dict[str, torch.Tensor]
@@ -67,8 +70,11 @@ class ProWDStrategy:
         result = {}
         offset = 0
         for k, v in ref.items():
-            result[k] = flat[offset : offset + v.numel()].reshape(v.shape)
-            offset += v.numel()
+            if _is_learnable_key(k):
+                result[k] = flat[offset : offset + v.numel()].reshape(v.shape)
+                offset += v.numel()
+            else:
+                result[k] = v
         return result
 
     def aggregate(
@@ -101,6 +107,7 @@ class ProWDStrategy:
             out = self.mlp(q_batch)
             loss = self.criterion(out, target)
             loss.backward()
+            nn.utils.clip_grad_norm_(self.mlp.parameters(), self.grad_clip)
             self.optimizer.step()
             total_loss += loss.item()
 

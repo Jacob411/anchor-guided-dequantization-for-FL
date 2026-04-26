@@ -25,6 +25,7 @@ from clients.anchor_client import AnchorClient
 from clients.constrained_client import ConstrainedClient
 from server.correction import ServerCorrection
 from server.aggregator import selective_aggregation, fedavg, apply_delta
+from server.correction import _is_learnable_key
 from baselines.fedavg import FedAvgStrategy
 from baselines.fedshift import FedShiftStrategy
 from baselines.prowd import ProWDStrategy
@@ -56,8 +57,14 @@ def load_config(path: str) -> dict:
 
 
 def flatten_model(state_dict: Dict[str, torch.Tensor]) -> int:
-    """Return total number of parameters in a state dict."""
-    return sum(t.numel() for t in state_dict.values())
+    """Return total number of *learnable* parameters in a state dict.
+
+    Excludes BatchNorm running stats (running_mean, running_var,
+    num_batches_tracked) because those are not corrected by CorrectionNet.
+    """
+    return sum(
+        t.numel() for k, t in state_dict.items() if _is_learnable_key(k)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -156,7 +163,7 @@ def run(args: argparse.Namespace) -> None:
     print(f"Using device: {device}")
 
     # ---- Data ----------------------------------------------------------------
-    client_loaders, val_loader, test_loader = load_cifar10(
+    client_loaders, client_test_loaders, val_loader, test_loader = load_cifar10(
         data_dir    = cfg["data"]["data_dir"],
         num_clients = num_clients,
         alpha       = alpha,
@@ -212,7 +219,7 @@ def run(args: argparse.Namespace) -> None:
 
     # ---- Metrics -------------------------------------------------------------
     tracker = MetricsTracker(
-        output_dir    = cfg["metrics"]["output_dir"],
+        output_dir    = args.output_csv or cfg["metrics"]["output_dir"],
         strategy_name = strategy.name,
     )
 
@@ -247,12 +254,18 @@ def run(args: argparse.Namespace) -> None:
 
         # Evaluate
         acc, loss = tracker.evaluate(global_model, test_loader, device)
+        client_mean, client_min, client_std = tracker.evaluate_clients(
+            global_model, client_test_loaders, device
+        )
         m = RoundMetrics(
-            round_num      = rnd,
-            top1_accuracy  = acc,
-            loss           = loss,
-            uplink_bytes   = round_bytes,
+            round_num       = rnd,
+            top1_accuracy   = acc,
+            loss            = loss,
+            uplink_bytes    = round_bytes,
             correction_loss = corr_loss,
+            client_mean_acc = client_mean,
+            client_min_acc  = client_min,
+            client_std_acc  = client_std,
         )
         tracker.record(m)
         if rnd % cfg["metrics"]["log_every_n_rounds"] == 0:
@@ -275,6 +288,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rounds",     type=int, default=None, help="Override num_rounds")
     parser.add_argument("--num_clients",type=int, default=None, help="Override num_clients")
     parser.add_argument("--alpha",      type=float, default=None, help="Dirichlet alpha")
+    parser.add_argument("--output_csv", type=str,   default=None, help="Override output directory for CSV results")
     return parser.parse_args()
 
 

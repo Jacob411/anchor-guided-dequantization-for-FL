@@ -84,12 +84,14 @@ def load_cifar10(
     batch_size: int,
     validation_size: int = 500,
     seed: int = 42,
-) -> Tuple[List[DataLoader], DataLoader, DataLoader]:
+    client_test_fraction: float = 0.2,
+) -> Tuple[List[DataLoader], List[DataLoader], DataLoader, DataLoader]:
     """
     Returns:
-        client_loaders : list of train DataLoaders, one per client
-        val_loader     : small server-side validation set (for distillation)
-        test_loader    : global test set for evaluation
+        client_loaders      : list of train DataLoaders, one per client
+        client_test_loaders : list of local test DataLoaders, one per client
+        val_loader          : small server-side validation set (for distillation)
+        test_loader         : global test set for evaluation
     """
     train_dataset = datasets.CIFAR10(
         root=data_dir, train=True,  download=True, transform=get_transforms(train=True)
@@ -118,16 +120,27 @@ def load_cifar10(
     # Re-index so dirichlet_partition sees contiguous indices
     partitions = dirichlet_partition(client_label_arr, num_clients, alpha, seed)
     client_loaders: List[DataLoader] = []
+    client_test_loaders: List[DataLoader] = []
     for part in partitions:
-        real_indices = train_indices[part].tolist()
-        loader = DataLoader(
-            Subset(train_dataset, real_indices),
+        real_indices = train_indices[part]
+        rng.shuffle(real_indices)
+        split = max(1, int(len(real_indices) * (1 - client_test_fraction)))
+        train_idx = real_indices[:split].tolist()
+        test_idx  = real_indices[split:].tolist()
+        client_loaders.append(DataLoader(
+            Subset(train_dataset, train_idx),
             batch_size=batch_size,
             shuffle=True,
             num_workers=2,
             pin_memory=True,
-        )
-        client_loaders.append(loader)
+        ))
+        client_test_loaders.append(DataLoader(
+            Subset(train_dataset, test_idx),
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=2,
+            pin_memory=True,
+        ))
 
     test_loader = DataLoader(
         test_dataset,
@@ -137,4 +150,4 @@ def load_cifar10(
         pin_memory=True,
     )
 
-    return client_loaders, val_loader, test_loader
+    return client_loaders, client_test_loaders, val_loader, test_loader

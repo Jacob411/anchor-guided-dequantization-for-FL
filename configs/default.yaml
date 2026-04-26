@@ -13,11 +13,11 @@ client:
   local_lr: 0.01
   local_batch_size: 32
   # Bit-widths assigned to constrained clients (sampled uniformly)
-  quantization_bits: [2, 4, 8, 16]
+  quantization_bits: [2]
 
 server:
   correction_lr: 0.001
-  correction_epochs: 5       # inner steps to train CorrectionNet per round
+  correction_epochs: 20       # inner steps to train CorrectionNet per round
   correction_hidden_dim: 256
   validation_size: 500       # server-side val set for distillation loss
 

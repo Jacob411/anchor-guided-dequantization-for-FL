@@ -25,6 +25,38 @@ def _flatten_delta(delta: Dict[str, torch.Tensor]) -> torch.Tensor:
     return torch.cat([t.float().flatten() for t in delta.values()])
 
 
+# Keys to exclude from CorrectionNet: BN running stats are not learnable
+# parameters and must not be perturbed by the correction network.
+_BN_BUFFER_SUFFIXES = ("running_mean", "running_var", "num_batches_tracked")
+
+
+def _is_learnable_key(key: str) -> bool:
+    """Return True if this state-dict key should go through CorrectionNet."""
+    return not any(key.endswith(s) for s in _BN_BUFFER_SUFFIXES)
+
+
+def _flatten_delta_learnable(delta: Dict[str, torch.Tensor]) -> torch.Tensor:
+    """Flatten only the *learnable* entries (excludes BN buffers)."""
+    return torch.cat(
+        [t.float().flatten() for k, t in delta.items() if _is_learnable_key(k)]
+    )
+
+
+def _unflatten_delta_learnable(
+    flat: torch.Tensor, reference: Dict[str, torch.Tensor]
+) -> Dict[str, torch.Tensor]:
+    """Restore a flat learnable vector; BN buffer keys get their original values."""
+    result = {}
+    offset = 0
+    for k, v in reference.items():
+        if _is_learnable_key(k):
+            numel = v.numel()
+            result[k] = flat[offset : offset + numel].reshape(v.shape)
+            offset += numel
+        else:
+            result[k] = v  # pass BN buffers through unchanged
+    return result
+
 def _unflatten_delta(
     flat: torch.Tensor, reference: Dict[str, torch.Tensor]
 ) -> Dict[str, torch.Tensor]:
@@ -63,13 +95,25 @@ class ServerCorrection:
         distill_weight: float = 0.5,
         temperature: float = 4.0,
         device: torch.device | None = None,
+        grad_clip: float = 1.0,
+        buffer_size: int = 10,
     ) -> None:
         self.device = device or torch.device("cpu")
         self.epochs = epochs
+        self.grad_clip = grad_clip
 
         self.net = CorrectionNet(delta_dim, hidden_dim).to(self.device)
         self.optimizer = optim.Adam(self.net.parameters(), lr=lr)
         self.criterion = CombinedCorrectionLoss(rec_weight, distill_weight, temperature)
+
+        # Normalization stats stored from last training call (used in apply())
+        self._norm_mean: torch.Tensor | None = None
+        self._norm_std:  torch.Tensor | None = None
+
+        # Replay buffer: list of (q_flat_batch, anchor_flat) tensors from past rounds.
+        # Capped at buffer_size rounds so memory stays bounded.
+        self._buffer: List[Tuple[torch.Tensor, torch.Tensor]] = []
+        self._buffer_size = buffer_size
 
     # ------------------------------------------------------------------
     # Training
@@ -99,15 +143,39 @@ class ServerCorrection:
         if not anchor_deltas or not quantized_deltas:
             return 0.0
 
-        # Build mean anchor target
+        # Build mean anchor target — learnable parameters only
         anchor_flat = torch.stack(
-            [_flatten_delta(d) for d in anchor_deltas]
+            [_flatten_delta_learnable(d) for d in anchor_deltas]
         ).mean(dim=0).to(self.device)
 
-        # Build input batch from quantized deltas
+        # Build input batch from quantized deltas — learnable parameters only
         q_flat_batch = torch.stack(
-            [_flatten_delta(d) for d in quantized_deltas]
+            [_flatten_delta_learnable(d) for d in quantized_deltas]
         ).to(self.device)
+
+        # ---- Replay buffer ---------------------------------------------------
+        # Accumulate (q_flat, anchor_flat) pairs across FL rounds so the net
+        # sees increasing amounts of data and CorrLoss trends downward.
+        self._buffer.append((q_flat_batch.cpu(), anchor_flat.cpu()))
+        if len(self._buffer) > self._buffer_size:
+            self._buffer.pop(0)  # evict oldest round
+
+        # Concatenate all buffered rounds into one training batch
+        all_q      = torch.cat([b[0] for b in self._buffer], dim=0).to(self.device)
+        all_anchor = torch.cat([b[1].unsqueeze(0).expand(b[0].shape[0], -1)
+                                for b in self._buffer], dim=0).to(self.device)
+        # ----------------------------------------------------------------------
+
+        # ---- Input normalisation (global scalar z-score) --------------------
+        s_mean = all_q.mean()                    # scalar over entire buffer
+        s_std  = all_q.std().clamp(min=1e-8)
+        q_flat_norm = (all_q      - s_mean) / s_std
+        anchor_norm = (all_anchor - s_mean) / s_std
+
+        # Cache stats (scalars) so apply() uses the same scale
+        self._norm_mean = s_mean.detach()
+        self._norm_std  = s_std.detach()
+        # ---------------------------------------------------------------------
 
         # Optionally precompute teacher logits on val set (distillation)
         teacher_logits_batch = None
@@ -118,28 +186,31 @@ class ServerCorrection:
         self.net.train()
         for _ in range(self.epochs):
             self.optimizer.zero_grad()
-            corrected_batch = self.net(q_flat_batch)
+            corrected_norm_batch = self.net(q_flat_norm)
 
-            # Expand anchor target to match batch size
-            target_batch = anchor_flat.unsqueeze(0).expand_as(corrected_batch)
+            # Targets already broadcast-matched via all_anchor expansion above
+            target_norm_batch = anchor_norm
 
             # Student logits: apply mean corrected delta to model and run val set
             student_logits_batch = None
             if global_model is not None and val_loader is not None and teacher_logits_batch is not None:
-                mean_corrected = corrected_batch.mean(dim=0)
+                # Denormalise before applying to model weights (use current-round stats)
+                mean_corrected_norm = corrected_norm_batch[-len(q_flat_batch):].mean(dim=0)
+                mean_corrected = mean_corrected_norm.detach() * s_std + s_mean
                 student_model = self._apply_delta_to_model(
                     global_model,
-                    _unflatten_delta(mean_corrected.detach(), next(iter(anchor_deltas)))
+                    _unflatten_delta_learnable(mean_corrected, next(iter(anchor_deltas)))
                 )
                 student_logits_batch = self._compute_teacher_logits(student_model, val_loader)
 
             loss = self.criterion(
-                corrected_batch,
-                target_batch,
+                corrected_norm_batch,
+                target_norm_batch,
                 student_logits_batch,
                 teacher_logits_batch,
             )
             loss.backward()
+            nn.utils.clip_grad_norm_(self.net.parameters(), self.grad_clip)
             self.optimizer.step()
             total_loss += loss.item()
 
@@ -155,12 +226,21 @@ class ServerCorrection:
     ) -> Dict[str, torch.Tensor]:
         """
         Pass a single quantized delta through CorrectionNet and reshape back.
+        Uses the same input normalisation stats computed during train().
+        BN running stats (running_mean/var, num_batches_tracked) bypass CorrectionNet.
         """
         self.net.eval()
         with torch.no_grad():
-            flat = _flatten_delta(quantized_delta).to(self.device)
-            corrected_flat = self.net(flat).cpu()
-        return _unflatten_delta(corrected_flat, quantized_delta)
+            flat = _flatten_delta_learnable(quantized_delta).to(self.device)
+            # Apply same normalisation (scalar) used during training
+            if self._norm_mean is not None and self._norm_std is not None:
+                flat_norm = (flat - self._norm_mean) / self._norm_std
+                corrected_norm = self.net(flat_norm)
+                corrected_flat = corrected_norm * self._norm_std + self._norm_mean
+            else:
+                corrected_flat = self.net(flat)
+            corrected_flat = corrected_flat.cpu()
+        return _unflatten_delta_learnable(corrected_flat, quantized_delta)
 
     # ------------------------------------------------------------------
     # Helpers

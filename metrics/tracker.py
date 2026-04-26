@@ -21,6 +21,9 @@ class RoundMetrics:
     uplink_bytes: int             # total uplink bytes this round
     correction_loss: float = 0.0  # CorrectionNet training loss
     delta_accuracy: float = 0.0   # round-over-round accuracy change
+    client_mean_acc: float = 0.0  # mean per-client local test accuracy (%)
+    client_min_acc: float = 0.0   # worst-client local test accuracy (%)
+    client_std_acc: float = 0.0   # std dev of per-client local test accuracy
 
 
 @dataclass
@@ -66,6 +69,20 @@ class MetricsTracker:
         avg_loss = total_loss / total
         return acc, avg_loss
 
+    def evaluate_clients(
+        self,
+        model: nn.Module,
+        client_test_loaders: List[DataLoader],
+        device: torch.device,
+    ) -> tuple[float, float, float]:
+        """Evaluate global model on each client's local test set.
+
+        Returns (mean_acc, min_acc, std_acc) in %.
+        """
+        accs = [self.evaluate(model, loader, device)[0] for loader in client_test_loaders]
+        accs_arr = torch.tensor(accs)
+        return float(accs_arr.mean()), float(accs_arr.min()), float(accs_arr.std())
+
     def record(self, metrics: RoundMetrics) -> None:
         """Append a round's metrics and write to CSV."""
         if self.history:
@@ -81,6 +98,9 @@ class MetricsTracker:
             f"Acc: {metrics.top1_accuracy:.2f}% "
             f"(Δ{metrics.delta_accuracy:+.2f}) | "
             f"Loss: {metrics.loss:.4f} | "
+            f"Client acc — mean: {metrics.client_mean_acc:.2f}% "
+            f"min: {metrics.client_min_acc:.2f}% "
+            f"std: {metrics.client_std_acc:.2f}% | "
             f"Uplink: {metrics.uplink_bytes / 1e6:.2f} MB | "
             f"CorrLoss: {metrics.correction_loss:.4f}"
         )
