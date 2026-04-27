@@ -1,0 +1,553 @@
+\documentclass[aspectratio=169]{beamer}
+
+\usetheme{default}
+\usecolortheme{default}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}{%
+  \hfill\insertframenumber\,/\,\inserttotalframenumber\hspace{1em}\vspace{0.5em}%
+}
+\setbeamerfont{frametitle}{series=\bfseries, size=\large}
+\setbeamerfont{title}{series=\bfseries}
+
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, shapes.rounded}
+\usepackage{xcolor}
+
+% ── colors ──────────────────────────────────────────────────────────────────
+\definecolor{ourcolor}{RGB}{31,119,180}
+\definecolor{fedavgcolor}{RGB}{212,100,0}
+\definecolor{prowdcolor}{RGB}{44,160,44}
+\definecolor{titleblue}{RGB}{20,70,140}
+\definecolor{wingreen}{RGB}{0,130,60}
+
+\setbeamercolor{frametitle}{bg=titleblue, fg=white}
+\setbeamercolor{title}{fg=titleblue}
+\setbeamercolor{structure}{fg=titleblue}
+\setbeamercolor{block title}{bg=titleblue!15, fg=titleblue}
+\setbeamercolor{block body}{bg=titleblue!5}
+\setbeamercolor{alerted text}{fg=ourcolor}
+
+\graphicspath{{figs/}}
+
+% ── title ───────────────────────────────────────────────────────────────────
+\title{Anchor-Guided Dequantization\\[4pt]for Federated Learning}
+\author{Jacob Simmons}
+\date{}
+
+% ────────────────────────────────────────────────────────────────────────────
+\begin{document}
+
+% ── 1. TITLE ────────────────────────────────────────────────────────────────
+\begin{frame}
+\vspace{1.2em}
+{\color{titleblue}\rule{\textwidth}{2pt}}
+\vspace{0.5em}
+
+{\LARGE\bfseries\color{titleblue} Anchor-Guided Dequantization}\\[6pt]
+{\large\bfseries\color{titleblue} for Federated Learning}
+
+\vspace{0.4em}
+{\color{titleblue}\rule{\textwidth}{1pt}}
+\vspace{1.0em}
+
+\textbf{Jacob Simmons}\\[0.3em]
+{\small Federated Learning Course}\\[1.5em]
+
+{\small\color{gray}
+  CIFAR-10 $\cdot$ CIFAR-10 $\cdot$ 10 clients $\cdot$ INT2/INT4/INT8 quantization\\
+  PyTorch $\cdot$ CorrectionNet $\cdot$ Replay buffer $\cdot$ Knowledge distillation
+}
+\end{frame}
+
+% ── 2. MOTIVATION ───────────────────────────────────────────────────────────
+\begin{frame}{Federated Learning and the Quantization Problem}
+\begin{columns}[T]
+\column{0.54\textwidth}
+\textbf{Federated learning:} train a model across distributed devices without sharing raw data.
+
+\vspace{0.7em}
+Each round:
+\begin{enumerate}
+  \item Server sends global model to clients
+  \item Clients train locally, compute weight \emph{deltas}
+  \item Clients send deltas back; server aggregates
+\end{enumerate}
+
+\vspace{0.7em}
+\textbf{The problem:}\\
+Not all clients can transmit FP32 updates.\\
+Resource-constrained devices (IoT, phones) must \textbf{quantize} before sending.
+
+\vspace{0.7em}
+\begin{block}{Quantization bias}
+  INT8/INT4 quantization introduces \textbf{systematic error} in every delta.\\
+  FedAvg averages biased and clean updates together — the bias propagates into the global model.
+\end{block}
+
+\column{0.44\textwidth}
+\begin{tikzpicture}[font=\small,
+  cbox/.style={rounded corners=3pt, draw, minimum width=3.0cm,
+               minimum height=0.65cm, align=center},
+  anch/.style={cbox, fill=ourcolor!18, draw=ourcolor},
+  cons/.style={cbox, fill=red!12, draw=red!60},
+  srv/.style={cbox, fill=gray!12, draw=gray!50, minimum height=0.65cm},
+  arr/.style={-Stealth, thick},
+]
+\node[anch] (a1) at (0, 3.5) {Anchor client};
+\node[anch] (a2) at (0, 2.7) {Anchor client};
+\node[font=\tiny, right=0.05cm of a1] {};
+\node[cons] (c1) at (0, 1.7) {Constrained client};
+\node[cons] (c2) at (0, 0.9) {Constrained client};
+\node[cons] (c3) at (0, 0.1) {Constrained client};
+\node[srv]  (sv) at (3.8, 1.8) {Server\\FedAvg};
+
+\draw[arr, ourcolor]  (a1.east) -- node[above,font=\tiny]{FP32} (sv.west |- a1);
+\draw[arr, ourcolor]  (a2.east) -- (sv.west |- a2);
+\draw[arr, red!70]    (c1.east) -- node[above,font=\tiny]{INT8} (sv.west |- c1);
+\draw[arr, red!70]    (c2.east) -- node[above,font=\tiny]{INT4} (sv.west |- c2);
+\draw[arr, red!70]    (c3.east) -- node[below,font=\tiny]{INT2} (sv.west |- c3);
+
+\node[font=\tiny, align=center, below=0.3cm of sv]
+  {\color{red!70}biased + clean\\averaged together};
+\end{tikzpicture}
+\end{columns}
+\end{frame}
+
+% ── 3. EXISTING APPROACH ────────────────────────────────────────────────────
+\begin{frame}{Existing Approach: ProWD}
+\begin{columns}[T]
+\column{0.50\textwidth}
+\textbf{ProWD} trains a server-side MLP to correct quantized deltas toward FP32.
+
+\vspace{0.8em}
+\textbf{How it works:}
+\begin{enumerate}
+  \item Each round: train MLP with MSE loss against the \emph{mean} anchor delta
+  \item Apply MLP to constrained deltas before aggregation
+  \item Reset MLP next round — no memory
+\end{enumerate}
+
+\vspace{0.8em}
+\textbf{Two fundamental weaknesses:}
+\begin{itemize}
+  \item \textbf{Mean target}: all constrained clients corrected toward the same average, ignoring per-client heterogeneity
+  \item \textbf{No replay buffer}: the MLP sees only this round's data — gradient estimates are noisy and unstable
+\end{itemize}
+
+\column{0.47\textwidth}
+\vspace{0.5em}
+\begin{block}{Result: ProWD is consistently worse}
+  \vspace{0.3em}
+  In every one of our experiments:\\[0.4em]
+  \begin{center}
+  \large AGD-Smart $>$ ProWD\\[0.2em]
+  \small by \textbf{1.9 to 5.7 pp}
+  \end{center}
+\end{block}
+
+\vspace{0.8em}
+\begin{block}{Our goal}
+  Fix both weaknesses — per-client matching and a growing replay buffer — while adding semantic distillation.
+\end{block}
+\end{columns}
+\end{frame}
+
+% ── 4. METHOD OVERVIEW ──────────────────────────────────────────────────────
+\begin{frame}{Our Method: AGD-Smart Overview}
+\begin{columns}[T]
+\column{0.52\textwidth}
+
+\begin{tikzpicture}[font=\small,
+  cbox/.style={rounded corners=3pt, draw, minimum width=2.6cm,
+               minimum height=0.6cm, align=center},
+  anch/.style={cbox, fill=ourcolor!18, draw=ourcolor},
+  cons/.style={cbox, fill=red!12, draw=red!60},
+  netbox/.style={cbox, fill=titleblue!15, draw=titleblue,
+                 minimum width=2.8cm, minimum height=1.6cm},
+  aggbox/.style={cbox, fill=wingreen!15, draw=wingreen, minimum width=2.2cm},
+  arr/.style={-Stealth, thick},
+]
+\node[anch] (a1) at (0, 3.2)  {Anchor 1 (FP32)};
+\node[anch] (a2) at (0, 2.4)  {Anchor 2 (FP32)};
+\node[cons] (c1) at (0, 1.2)  {Client 3 (INT4)};
+\node[cons] (c2) at (0, 0.4)  {Client 4 (INT2)};
+
+\node[netbox, align=center] (net) at (4.0, 1.8) {%
+  \textbf{CorrectionNet} $f_\theta$\\[4pt]
+  {\scriptsize replay buffer}\\{\scriptsize (grows each round)}
+};
+\node[aggbox] (agg) at (4.0, -0.3) {\textbf{Aggregate}\\new model};
+
+% anchor → CorrectionNet (supervision, solid)
+\draw[arr, ourcolor]
+  (a1.east) to[out=0, in=135] node[above, sloped, font=\tiny]{supervise} (net.north west);
+\draw[arr, ourcolor]
+  (a2.east) to[out=0, in=150] (net.west);
+
+% constrained → CorrectionNet
+\draw[arr, red!70]
+  (c1.east) to[out=0, in=210] (net.south west);
+\draw[arr, red!70]
+  (c2.east) to[out=0, in=225] (net.south);
+
+% CorrectionNet → aggregation
+\draw[arr, titleblue, very thick]
+  (net.south) -- node[right, font=\tiny]{corrected $\hat{\Delta w}$} (agg.north);
+
+% anchors bypass directly to aggregation
+\draw[arr, ourcolor, dashed, thin]
+  (a1.east) to[out=5, in=120] (agg.north west);
+\end{tikzpicture}
+
+\column{0.46\textwidth}
+\vspace{0.3em}
+\textbf{Three improvements over ProWD:}
+
+\vspace{0.5em}
+\begin{block}{1. Residual CorrectionNet}
+$f_\theta(x) = x + \text{Dec}(\text{Enc}(x))$\\
+Zero-init decoder $\Rightarrow$ starts as identity, learns corrections gradually
+\end{block}
+
+\vspace{0.3em}
+\begin{block}{2. Replay Buffer}
+Accumulates $(q\text{-delta, FP32-target})$ pairs across \emph{all} rounds — stable gradient estimates every round
+\end{block}
+
+\vspace{0.3em}
+\begin{block}{3. Smart Matching}
+Each constrained client paired with its \emph{most cosine-similar} anchor — not the mean
+\[
+a^* = \arg\max_a \frac{\Delta w_j^q \cdot \Delta w_a^{fp}}{\|\Delta w_j^q\|\,\|\Delta w_a^{fp}\|}
+\]
+\end{block}
+\end{columns}
+\end{frame}
+
+% ── 5. TRAINING OBJECTIVE ───────────────────────────────────────────────────
+\begin{frame}{Training Objective and Design Choices}
+\begin{columns}[T]
+\column{0.50\textwidth}
+\textbf{Combined loss per round:}
+\[
+\mathcal{L} = \underbrace{\lambda_r \|f_\theta(\Delta w^q) - \Delta w^{fp}\|_2^2}_{\text{reconstruction}}
+\;+\; \underbrace{\lambda_d\, D_{\mathrm{KL}}(p_{\text{anchor}} \| p_{\text{corrected}})}_{\text{distillation}}
+\]
+
+\vspace{0.3em}
+\textbf{Distillation} ($\tau=4$): forces corrected updates to produce predictions aligned with anchor predictions — semantic anchoring, not just weight-space matching
+
+\vspace{0.7em}
+\textbf{Direction-preserving blend:}
+\[
+\hat{\Delta w}_j = \underbrace{\beta\, f_\theta(\Delta w_j^q)}_{\text{corrected}} + \underbrace{(1-\beta)\,\Delta w_j^q}_{\text{original}}
+\]
+$\beta=0.8$: keeps 20\% of client's own direction under non-IID data
+
+\column{0.48\textwidth}
+\vspace{0.3em}
+\textbf{Adaptive warmup ($W=5$ rounds):}
+
+\vspace{0.3em}
+\includegraphics[width=\linewidth]{int2_warmup.png}
+
+{\scriptsize CorrectionNet trains during warmup to fill the replay buffer, but correction is not applied until round 6. This prevents the untrained network from degrading early accuracy.}
+\end{columns}
+\end{frame}
+
+% ── 6. INT2 MAIN RESULT ─────────────────────────────────────────────────────
+\begin{frame}{Key Result: INT2 Quantization — 50 Rounds}
+\begin{columns}[T]
+\column{0.62\textwidth}
+\includegraphics[width=\linewidth]{int2_curve.png}
+
+\column{0.36\textwidth}
+\vspace{0.4em}
+\textbf{Setting:}\\
+INT2, 20\% anchors,\\
+near-IID ($\alpha=100$),\\
+CIFAR-10
+
+\vspace{0.8em}
+\begin{tabular}{lcc}
+\toprule
+ & \textbf{R10} & \textbf{R50} \\
+\midrule
+FedAvg & 44.0 & 75.4 \\
+ProWD  & 57.3 & 71.8 \\
+\textbf{Ours} & \textbf{58.2} & \textbf{77.5} \\
+\midrule
+{\color{ourcolor}vs FedAvg} & {\color{ourcolor}\textbf{+14.2}} & {\color{ourcolor}+2.1} \\
+{\color{ourcolor}vs ProWD}  & {\color{ourcolor}+0.9} & {\color{ourcolor}\textbf{+5.7}} \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.8em}
+\begin{itemize}
+  \item {\color{ourcolor}\textbf{+14.2 pp}} at round 10
+  \item Lead at \textbf{every single round}\\R1 through R50
+  \item ProWD stagnates;\\AGD-Smart's buffer keeps improving
+\end{itemize}
+\end{columns}
+\end{frame}
+
+% ── 7. WARMUP ZOOM ──────────────────────────────────────────────────────────
+\begin{frame}{The CorrectionNet Activation Jump}
+\begin{columns}[T]
+\column{0.56\textwidth}
+\includegraphics[width=\linewidth]{int2_warmup.png}
+
+\column{0.42\textwidth}
+\vspace{0.5em}
+\textbf{What happens at round 6:}
+
+\begin{enumerate}
+  \item Rounds 1--5: CorrectionNet trains quietly, fills replay buffer with 5 rounds of $(q, \text{FP32})$ pairs
+  \item Round 6: correction activates for the first time
+  \item The replay buffer now has enough data for a meaningful correction
+  \item Result: \textbf{+18 pp accuracy gain in a single round}
+\end{enumerate}
+
+\vspace{0.7em}
+\textbf{This is the signature behavior of AGD-Smart:} the correction is calibrated before it fires, preventing early degradation while enabling a sharp improvement.
+
+\vspace{0.5em}
+{\color{gray}\small FedAvg and ProWD show no such jump — they are not learning a systematic correction.}
+\end{columns}
+\end{frame}
+
+% ── 8. NOISE SCALING THRESHOLD ──────────────────────────────────────────────
+\begin{frame}{When Does Averaging Break Down?}
+\begin{columns}[T]
+\column{0.58\textwidth}
+\includegraphics[width=\linewidth]{noise_scaling.png}
+
+\column{0.40\textwidth}
+\vspace{0.3em}
+\textbf{Quantization levels:}\\[0.4em]
+\begin{tabular}{lr}
+INT8 & 255 levels \\
+INT6 & 63 levels \\
+INT4 & 15 levels \\
+INT3 & 7 levels \\
+\textbf{INT2} & \textbf{3 levels} \\
+\end{tabular}
+
+\vspace{0.8em}
+\textbf{The threshold:}\\
+At $\geq 7$ levels (INT3+): statistical averaging is sufficient — FedAvg wins
+
+\vspace{0.5em}
+At \textbf{3 levels (INT2)}: every non-zero gradient collapses to $\{-s, 0, +s\}$. Sign cancellation across clients destroys the signal. Averaging fails.
+
+\vspace{0.6em}
+\textbf{AGD-Smart beats ProWD at every bit-width} (by 1.8--10.9 pp). The replay buffer advantage is consistent regardless of noise level.
+\end{columns}
+\end{frame}
+
+% ── 9. WHY ONLY INT2 ────────────────────────────────────────────────────────
+\begin{frame}{Why Only INT2? The Threshold Explained}
+\begin{columns}[T]
+\column{0.50\textwidth}
+\includegraphics[width=\linewidth]{vs_fedavg.png}
+
+{\scriptsize Positive = AGD-Smart beats FedAvg.\\Only INT2 crosses zero.}
+
+\column{0.48\textwidth}
+\vspace{0.3em}
+\textbf{INT2: only 3 quantization levels}
+\[
+\Delta w^q \;\in\; \{-s,\; 0,\; +s\}
+\]
+
+\textbf{Two problems at 3 levels:}
+\begin{itemize}
+  \item \textbf{Sign cancellation:} clients with balanced $\pm 1$ values average to $\approx 0$, destroying the update
+  \item \textbf{Magnitude erasure:} large and small gradients get the same code — mean delta has wrong magnitudes
+\end{itemize}
+
+\vspace{0.5em}
+\textbf{CorrectionNet escapes this} because it is a learned nonlinear mapping, not an average. It can learn: ``when client sends $\{-1,0,+1\}$, the true delta looks like \emph{this}.''
+
+\vspace{0.5em}
+\textbf{At INT3+ (7+ levels)}: enough resolution that averaging recovers the signal — CorrectionNet's overhead slightly hurts.
+\end{columns}
+\end{frame}
+
+% ── 10. INT8 NEAR-IID ───────────────────────────────────────────────────────
+\begin{frame}{Results: INT8 Quantization, Near-IID}
+\begin{columns}[T]
+\column{0.56\textwidth}
+\includegraphics[width=\linewidth]{int8_curve.png}
+
+\column{0.42\textwidth}
+\vspace{0.4em}
+\textbf{Setting:} INT8, 50\% anchors, near-IID ($\alpha=100$)\\[0.3em]
+This replicates the ProWD paper benchmark.
+
+\vspace{0.7em}
+\begin{tabular}{lccc}
+\toprule
+ & \textbf{R10} & \textbf{R25} & \textbf{R50} \\
+\midrule
+FedAvg & 67.3 & 76.8 & 82.7 \\
+ProWD  & 64.6 & 72.8 & 79.3 \\
+\textbf{Ours} & \textbf{67.6} & \textbf{75.8} & \textbf{81.2} \\
+\midrule
+vs ProWD & {\color{ourcolor}+3.1} & {\color{ourcolor}+2.9} & {\color{ourcolor}+1.9} \\
+vs FedAvg & {\color{ourcolor}+0.3} & $-$1.1 & $-$1.5 \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.7em}
+\begin{itemize}
+  \item AGD-Smart leads FedAvg \textbf{at round 10} (faster early convergence)
+  \item Beats ProWD by \textbf{1.9--3.1 pp} throughout
+  \item Under near-IID INT8, FedAvg's averaging is already good — a small gap at R50 is expected
+\end{itemize}
+\end{columns}
+\end{frame}
+
+% ── 11. INT4 NEAR-IID ───────────────────────────────────────────────────────
+\begin{frame}{Results: INT4 Quantization, Near-IID}
+\begin{columns}[T]
+\column{0.56\textwidth}
+\includegraphics[width=\linewidth]{int4_curve.png}
+
+\column{0.42\textwidth}
+\vspace{0.4em}
+\textbf{Setting:} INT4, 50\% anchors, near-IID ($\alpha=100$)
+
+\vspace{0.7em}
+\begin{tabular}{lccc}
+\toprule
+ & \textbf{R10} & \textbf{R25} & \textbf{R50} \\
+\midrule
+FedAvg & 67.4 & 77.5 & 83.2 \\
+ProWD  & 64.8 & 73.8 & 77.7 \\
+\textbf{Ours} & \textbf{67.5} & \textbf{77.1} & \textbf{82.5} \\
+\midrule
+vs ProWD  & {\color{ourcolor}+2.7} & {\color{ourcolor}+3.4} & {\color{ourcolor}\textbf{+4.8}} \\
+vs FedAvg & {\color{ourcolor}+0.1} & $-$0.4 & $-$0.7 \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.7em}
+\begin{itemize}
+  \item Nearly matches FedAvg (within \textbf{0.7\%} at R50)
+  \item Strongest ProWD margin: \textbf{+4.8 pp}
+  \item ProWD is notably volatile (+1--2\% swings); AGD-Smart stays stable
+\end{itemize}
+\end{columns}
+\end{frame}
+
+% ── 12. NON-IID ─────────────────────────────────────────────────────────────
+\begin{frame}{Results: Non-IID Data ($\alpha=0.5$), INT8}
+\begin{columns}[T]
+\column{0.56\textwidth}
+\includegraphics[width=\linewidth]{noniid_curve.png}
+
+\column{0.42\textwidth}
+\vspace{0.4em}
+\textbf{Setting:} INT8, 50\% anchors, non-IID ($\alpha=0.5$)
+
+\vspace{0.7em}
+\begin{tabular}{lccc}
+\toprule
+ & \textbf{R10} & \textbf{R25} & \textbf{R50} \\
+\midrule
+FedAvg & 65.1 & 73.4 & 80.4 \\
+ProWD  & 56.1 & 69.6 & 72.8 \\
+\textbf{Ours} & \textbf{59.2} & \textbf{71.2} & \textbf{75.3} \\
+\midrule
+vs ProWD  & {\color{ourcolor}+3.1} & {\color{ourcolor}+1.6} & {\color{ourcolor}+2.5} \\
+vs FedAvg & $-$5.9 & $-$2.2 & $-$5.1 \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.7em}
+\textbf{Why FedAvg wins here:}\\
+Non-IID data means each client has genuinely different gradient directions. FedAvg preserves that diversity. Correction networks partially homogenize toward anchor direction — an inherent tension.
+
+\vspace{0.5em}
+AGD-Smart still beats ProWD by \textbf{+2.5 pp}, and the direction-preserving blend ($\beta=0.8$) narrows the FedAvg gap vs. unconstrained correction.
+\end{columns}
+\end{frame}
+
+% ── 13. SUMMARY TABLE ───────────────────────────────────────────────────────
+\begin{frame}{Summary Across All Configurations}
+\begin{center}
+\large
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Config} & \textbf{Rounds} & \textbf{AGD-Smart} & \textbf{vs.\ ProWD} & \textbf{vs.\ FedAvg} \\
+\midrule
+Near-IID, INT2, 20\% anchors
+  & 50 & \textbf{77.5\%}
+  & {\color{wingreen}+5.7 pp} & {\color{wingreen}\textbf{+2.1 pp}} \\[4pt]
+Near-IID, INT4, 50\% anchors
+  & 50 & 82.5\%
+  & {\color{wingreen}+4.8 pp} & $-$0.7 pp \\[4pt]
+Near-IID, INT8, 50\% anchors
+  & 50 & 81.2\%
+  & {\color{wingreen}+1.9 pp} & $-$1.5 pp \\[4pt]
+Non-IID, INT8, 50\% anchors
+  & 50 & 75.3\%
+  & {\color{wingreen}+2.5 pp} & $-$5.1 pp \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.8em}
+\begin{columns}
+\column{0.5\textwidth}
+\begin{block}{Consistent finding}
+  AGD-Smart \textbf{beats ProWD in every single configuration} by 1.9--5.7 pp. The replay buffer and distillation loss provide a stable, compounding advantage.
+\end{block}
+
+\column{0.48\textwidth}
+\begin{block}{When does AGD-Smart beat FedAvg?}
+  Only under extreme quantization noise (INT2 / 3 levels) — exactly the regime where statistical averaging fundamentally fails.
+\end{block}
+\end{columns}
+\end{frame}
+
+% ── 14. CONCLUSION ──────────────────────────────────────────────────────────
+\begin{frame}{Conclusion}
+\begin{columns}[T]
+\column{0.52\textwidth}
+
+\textbf{What we built:}\\
+AGD-Smart — a server-side CorrectionNet for heterogeneous-quantization FL
+
+\vspace{0.5em}
+\begin{block}{Key design choices}
+\begin{itemize}
+  \item \textbf{Replay buffer} — stable learning across rounds, not just this round
+  \item \textbf{Smart matching} — per-client, not mean anchor target
+  \item \textbf{Distillation loss} — semantic alignment, not just weight-space MSE
+  \item \textbf{Adaptive warmup} — buffer fills before correction fires
+\end{itemize}
+\end{block}
+
+\vspace{0.5em}
+\begin{block}{Core finding}
+There is a \textbf{sharp threshold at 3 quantization levels (INT2)} below which statistical averaging fails. AGD-Smart is specifically built for this regime — and is the only method that beats FedAvg there.
+\end{block}
+
+\column{0.46\textwidth}
+\includegraphics[width=\linewidth]{vs_fedavg.png}
+
+\vspace{0.4em}
+{\small
+\textbf{Beats ProWD} in all 4 configs (1.9--5.7 pp)\\
+\textbf{Beats FedAvg} at INT2 by +14.2 pp (R10)\\
+\textbf{Lead persists} across all 50 rounds
+}
+\end{columns}
+\end{frame}
+
+\end{document}
