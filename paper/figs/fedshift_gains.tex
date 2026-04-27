@@ -1,0 +1,34 @@
+\begin{tikzpicture}[x=0.62cm,y=0.82cm,font=\small]
+  \def\barhalf{0.17}
+
+  \node[anchor=west,font=\bfseries] at (0,4.9) {Round 10 gain over FedShift};
+  \node[anchor=west,font=\bfseries] at (14,4.9) {Round 50 gain over FedShift};
+
+  \foreach \x/\lab in {0/0,2/2,4/4,6/6,8/8,10/10,12/12} {
+    \draw[gray!25] (\x,0.45) -- (\x,4.35);
+    \node[font=\scriptsize] at (\x,0.08) {\lab};
+  }
+  \draw[->,thick] (0,0.45) -- (12.55,0.45);
+  \node[font=\scriptsize] at (6.2,-0.28) {percentage points};
+
+  \foreach \x/\lab in {14/0,15/0.5,16/1.0,17/1.5,18/2.0} {
+    \draw[gray!25] (\x,0.45) -- (\x,4.35);
+    \node[font=\scriptsize] at (\x,0.08) {\lab};
+  }
+  \draw[->,thick] (14,0.45) -- (18.55,0.45);
+  \node[font=\scriptsize] at (16.25,-0.28) {percentage points};
+
+  \foreach \y/\name/\early/\final in {
+    4/{Near-IID INT2}/11.3/0.1,
+    3/{Non-IID INT8}/2.0/1.0,
+    2/{Near-IID INT4}/1.0/1.8,
+    1/{Near-IID INT8}/1.3/0.1
+  } {
+    \node[anchor=east,align=right,text width=2.7cm] at (-0.25,\y) {\name};
+    \fill[anchorblue!85] (0,\y-\barhalf) rectangle (\early,\y+\barhalf);
+    \node[anchor=west,font=\scriptsize] at (\early+0.15,\y) {+\early};
+    \pgfmathsetmacro{\finalx}{14 + 2*\final}
+    \fill[buffergreen!85] (14,\y-\barhalf) rectangle (\finalx,\y+\barhalf);
+    \node[anchor=west,font=\scriptsize] at (\finalx+0.12,\y) {+\final};
+  }
+\end{tikzpicture}

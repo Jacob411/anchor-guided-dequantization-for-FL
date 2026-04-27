@@ -27,6 +27,7 @@ effective levels.
     Method & R10 & R20 & R30 & R50 \\
     \midrule
     FedAvg                    & 44.0 & 64.9 & 70.2 & 75.4 \\
+    FedShift                  & 46.9 & 67.0 & 72.9 & 77.4 \\
     ProWD                     & 57.3 & 67.0 & 68.5 & 71.8 \\
     \textbf{\method}          & \textbf{58.2} & \textbf{70.2} & \textbf{75.3} & \textbf{77.5} \\
     \bottomrule
@@ -35,22 +36,26 @@ effective levels.
 \end{table}
 
 Table~\ref{tab:int2_checkpoints} shows that \method is the best method at every
-reported checkpoint, not just at the end. It starts only slightly above ProWD
-at round 10 (+0.9), but the gap widens to +3.2 at round 20, +6.8 at round 30,
-and +5.7 at round 50. That widening margin matters because both learned
-correction methods use the same anchor idea; the extra gain is coming from the
-smarter matching, replay buffer, and blended correction pipeline rather than
-from warmup alone. Against FedAvg, the +14.2 advantage at round 10 shows that
-correction removes the most damaging quantization bias early, while the final
-+2.1 margin shows the method is improving the end model as well, not just the
-speed of convergence.
+reported checkpoint, but the comparison to FedShift changes the interpretation
+of the result. FedShift already fixes much of the end-of-training bias: by
+round 50 it reaches 77.4, essentially tied with \method at 77.5 and clearly
+above FedAvg. The remaining advantage of \method is therefore front-loaded. It
+leads FedShift by +11.3 points at round 10 and by +3.2 at round 20, which is
+exactly the interval where a communication-limited system benefits most from a
+stronger correction policy. Relative to ProWD, the gap still widens over time,
+reaching +5.7 at round 50. That separates the three correction strategies
+clearly: ProWD forgets too much from round to round, FedShift eventually
+recovers but reacts slowly, and \method combines fast activation with strong
+final accuracy.
 
 \subsection{Noise Scaling}
 
 Table~\ref{tab:noise_scaling} shows that the method's value is highly dependent
 on quantization severity. Once the bit-width rises to INT3 or above, FedAvg is
 usually good enough. The correction pipeline becomes most valuable when the
-quantized representation collapses too much directional information.
+quantized representation collapses too much directional information. FedShift
+was rerun only on the four shared headline configurations, so this table keeps
+the broader bit-width threshold comparison against FedAvg and ProWD.
 
 \begin{table}[h]
   \centering
@@ -80,7 +85,10 @@ the gain flips with quantization severity: \method is still 1.7--3.9 points
 behind from INT8 through INT3, then jumps to a +5.3 advantage at INT2. That
 pattern supports the main claim of the paper. Learned dequantization is not
 universally necessary, but it becomes valuable once the quantizer is coarse
-enough that plain averaging cannot preserve update direction.
+enough that plain averaging cannot preserve update direction. The shared
+FedShift reruns follow the same story: it is competitive in the easier near-IID
+settings and helpful at INT2, but the learned model becomes more valuable once
+early convergence or heterogeneous matching matters.
 
 \subsection{Behavior in Milder Regimes}
 
@@ -114,31 +122,48 @@ recover the signal.
 
 \begin{table*}[t]
   \centering
-  \caption{Summary across reported configurations.}
+  \caption{Summary across shared configurations, including FedShift.}
   \label{tab:summary}
   \small
   \resizebox{0.95\textwidth}{!}{%
-  \begin{tabular}{lcccc}
+  \begin{tabular}{lccccc}
     \toprule
-    Setting & \method @ R10 & \method @ R50 & vs. ProWD @ R50 & vs. FedAvg @ R50 \\
+    Setting & FedShift @ R50 & \method @ R50 & vs. FedShift & vs. ProWD & vs. FedAvg \\
     \midrule
-    Near-IID, INT2, 20\% anchors & 58.2 & 77.5 & +5.7 & +2.1 \\
-    Near-IID, INT8, 50\% anchors & 67.6 & 81.2 & +1.9 & -1.5 \\
-    Near-IID, INT4, 50\% anchors & 67.5 & 82.5 & +4.8 & -0.7 \\
-    Non-IID, INT8, 50\% anchors  & 59.2 & 75.3 & +2.5 & -5.1 \\
+    Near-IID, INT2, 20\% anchors & 77.4 & 77.5 & +0.1 & +5.7 & +2.1 \\
+    Near-IID, INT8, 50\% anchors & 81.1 & 81.2 & +0.1 & +1.9 & -1.5 \\
+    Near-IID, INT4, 50\% anchors & 80.7 & 82.5 & +1.8 & +4.8 & -0.7 \\
+    Non-IID, INT8, 50\% anchors  & 73.8 & 74.8 & +1.0 & +2.0 & -5.6 \\
     \bottomrule
   \end{tabular}}
 \end{table*}
 
-Table~\ref{tab:summary} collects the regime-level comparison. The near-IID INT8
-row is the clearest example of a setting where \method is helpful but not
-strictly needed: it improves on ProWD by +1.9 at round 50, yet it still trails
-FedAvg by 1.5 because the uploaded updates are already compatible enough for
-simple averaging. INT4 shifts the balance slightly in favor of correction: the
-method beats ProWD by +4.8 and finishes only 0.7 behind FedAvg. INT2 is the
-decisive case, since it is the only row where \method beats both baselines at
-the end and also produces the strongest round-10 result. The non-IID INT8 row
-shows the main limitation. \method still outperforms ProWD by +2.5, but it
-remains 5.1 points behind FedAvg, which suggests that anchor-guided correction
-can wash out useful client-specific variation when data heterogeneity, rather
-than quantization alone, is the dominant source of mismatch.
+Table~\ref{tab:summary} sharpens the baseline story. FedShift is the stronger
+lightweight comparator: it beats ProWD in three of the four shared settings and
+nearly matches \method at the easier near-IID endpoints. That makes the INT4
+and non-IID rows more informative than the near-IID INT8 tie. At INT4,
+\method keeps a +1.8 final advantage over FedShift while finishing within 0.7
+of FedAvg. Under non-IID INT8, the final gap is +1.0 and the midpoint gap is
++3.9 at round 25, which suggests that smart client-to-anchor matching matters
+more than a single global shift once anchor and constrained populations no
+longer share the same mean direction. INT2 is different again: the final
+accuracy is nearly tied, but the route to that endpoint is not.
+
+\begin{figure}[t]
+  \centering
+  \resizebox{0.98\columnwidth}{!}{\input{figs/fedshift_gains.tex}}
+  \caption{\method's gain over FedShift at round 10 and round 50 on the four
+  shared configurations. The largest early-round advantage appears under INT2,
+  while the largest persistent end-of-training gain appears at INT4.}
+  \label{fig:fedshift_gains}
+\end{figure}
+
+Figure~\ref{fig:fedshift_gains} makes that contrast explicit. FedShift is
+already a very strong no-learning baseline when the client population is
+near-IID. At near-IID INT8 and INT2, the final gap is only +0.1. But those
+near ties hide where \method helps most. In the severe INT2 regime it opens an
+11.3-point lead by round 10, which matters if communication rounds are scarce.
+At INT4, it keeps a meaningful +1.8 end-of-training advantage, suggesting that
+the replayed learned corrector is still buying something after simple mean
+alignment has done its part. Under non-IID data, FedShift loses more clearly
+because the anchor mean is no longer a reliable global target.

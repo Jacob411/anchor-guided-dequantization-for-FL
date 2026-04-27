@@ -26,11 +26,20 @@ at the server.
 The closest prior work is ProWD, which explicitly targets bit-width
 heterogeneous FL through a server-side dequantizer
 \citep{yoon2022prowd}. FedShift addresses the same mixed-precision aggregation
-problem from a different angle by using weight shifting to align client updates
-before aggregation \citep{seo2024fedshift}. Our implementation sits in this
-same mixed-precision corridor, but it differs in three practical ways: it uses
-full-precision anchor clients as direct supervision, it trains the corrector on
-a replayed history instead of only the current round, and it uses smart
-client-to-anchor matching rather than a single global target. The result should
-therefore be read as a server-side, anchor-supervised dequantization variant
-positioned between plain FedAvg and recent mixed-precision correction methods.
+problem from a different angle by applying a per-layer global mean shift that
+aligns quantized uploads to the anchor distribution before aggregation
+\citep{seo2024fedshift}. That makes FedShift an especially useful comparison:
+it adds a real correction step without any learned model, replay buffer, or
+client-specific target selection.
+
+Our implementation sits in this same mixed-precision corridor, but it differs
+in three practical ways: it uses full-precision anchor clients as direct
+supervision, it trains the corrector on a replayed history instead of only the
+current round, and it uses smart client-to-anchor matching rather than a
+single global target. In the shared experiments, that extra structure matters.
+FedShift is already a stronger lightweight baseline than ProWD in most near-IID
+settings, yet \method still pulls ahead where personalized correction matters
+most: early INT2 convergence, final INT4 accuracy, and robustness under
+non-IID data. The result should therefore be read as a server-side,
+anchor-supervised dequantization variant positioned between plain FedAvg and
+recent mixed-precision correction methods.

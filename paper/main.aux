@@ -21,37 +21,40 @@
 \newlabel{fig:method_architecture}{{1}{3}{}{figure.1}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Correction Network and Replay Buffer}{3}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {3.4}Training Objective}{3}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.5}Applying Correction and Aggregation}{3}{}\protected@file@percent }
 \citation{mcmahan2017}
+\citation{seo2024fedshift}
 \citation{yoon2022prowd}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.5}Applying Correction and Aggregation}{4}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {3.6}Warmup}{4}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {4}Experimental Setup}{4}{}\protected@file@percent }
 \@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Reported experimental configurations.}}{4}{}\protected@file@percent }
 \newlabel{tab:configs}{{1}{4}{}{table.1}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {5}Results}{4}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Main Result: INT2 Is the Regime Where Correction Matters}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5}Results}{5}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Main Result: INT2 Is the Regime Where Correction Matters}{5}{}\protected@file@percent }
 \@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces INT2 near-IID benchmark over 50 rounds. AGD-Smart\xspace  gains sharply after warmup and stays ahead of FedAvg throughout the full run.}}{5}{}\protected@file@percent }
 \newlabel{fig:int2_curve}{{2}{5}{}{figure.2}{}}
 \@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces INT2 near-IID checkpoints (\%).}}{5}{}\protected@file@percent }
 \newlabel{tab:int2_checkpoints}{{2}{5}{}{table.2}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Noise Scaling}{5}{}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Round-20 accuracy under different near-IID bit-widths with 20\% anchors.}}{5}{}\protected@file@percent }
-\newlabel{tab:noise_scaling}{{3}{5}{}{table.3}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Round-20 accuracy under different near-IID bit-widths with 20\% anchors.}}{6}{}\protected@file@percent }
+\newlabel{tab:noise_scaling}{{3}{6}{}{table.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Secondary regimes. The method stays consistently above ProWD, nearly matches FedAvg under near-IID INT4, and narrows the gap to FedAvg under non-IID INT8 without fully closing it.}}{6}{}\protected@file@percent }
+\newlabel{fig:other_curves}{{3}{6}{}{figure.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Behavior in Milder Regimes}{6}{}\protected@file@percent }
 \bibstyle{unsrtnat}
 \bibdata{references}
 \bibcite{mcmahan2017}{{1}{2017}{{McMahan et~al.}}{{McMahan, Moore, Ramage, Hampson, and Arcas}}}
-\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Secondary regimes. The method stays consistently above ProWD, nearly matches FedAvg under near-IID INT4, and narrows the gap to FedAvg under non-IID INT8 without fully closing it.}}{6}{}\protected@file@percent }
-\newlabel{fig:other_curves}{{3}{6}{}{figure.3}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Summary across reported configurations.}}{6}{}\protected@file@percent }
-\newlabel{tab:summary}{{4}{6}{}{table.4}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Behavior in Milder Regimes}{6}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {6}Conclusion}{6}{}\protected@file@percent }
 \bibcite{li2020fedprox}{{2}{2020}{{Li et~al.}}{{Li, Sahu, Zaheer, Sanjabi, Talwalkar, and Smith}}}
 \bibcite{karimireddy2020scaffold}{{3}{2020}{{Karimireddy et~al.}}{{Karimireddy, Kale, Mohri, Reddi, Stich, and Suresh}}}
 \bibcite{wang2020fednova}{{4}{2020}{{Wang et~al.}}{{Wang, Liu, Liang, Joshi, and Poor}}}
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Summary across shared configurations, including FedShift.}}{7}{}\protected@file@percent }
+\newlabel{tab:summary}{{4}{7}{}{table.4}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces AGD-Smart\xspace  's gain over FedShift at round 10 and round 50 on the four shared configurations. The largest early-round advantage appears under INT2, while the largest persistent end-of-training gain appears at INT4.}}{7}{}\protected@file@percent }
+\newlabel{fig:fedshift_gains}{{4}{7}{}{figure.4}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6}Conclusion}{7}{}\protected@file@percent }
 \bibcite{yoon2022prowd}{{5}{2022}{{Yoon et~al.}}{{Yoon, Park, Jeong, and Hwang}}}
 \bibcite{seo2024fedshift}{{6}{2024}{{Seo et~al.}}{{Seo, Kim, and Rong}}}
 \bibcite{chen2024fedmpq}{{7}{2024}{{Chen and Vikalo}}{{}}}
 \bibcite{alistarh2017qsgd}{{8}{2017}{{Alistarh et~al.}}{{Alistarh, Grubic, Li, Tomioka, and Vojnovic}}}
 \bibcite{reisizadeh2020fedpaq}{{9}{2020}{{Reisizadeh et~al.}}{{Reisizadeh, Mokhtari, Hassani, Jadbabaie, and Pedarsani}}}
-\gdef \@abspage@last{7}
+\gdef \@abspage@last{8}

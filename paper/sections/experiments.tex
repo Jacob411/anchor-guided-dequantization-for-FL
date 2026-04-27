@@ -14,10 +14,15 @@ Each experiment uses 10 total clients with full participation. Anchor fractions
 range from 20\% to 50\%, depending on the configuration.
 
 \textbf{Baselines.}
-We compare against FedAvg \citep{mcmahan2017} and a simplified ProWD-style
-baseline derived from \citet{yoon2022prowd}. The simplified ProWD baseline
-implemented in this repository uses a shared three-layer residual MLP trained
-only on the current round and targets the mean anchor delta.
+We compare against FedAvg \citep{mcmahan2017}, FedShift
+\citep{seo2024fedshift}, and a simplified ProWD-style baseline derived from
+\citet{yoon2022prowd}. FedShift applies a per-layer global mean shift so that
+the average quantized upload is aligned to the average anchor upload in the
+current round. The simplified ProWD baseline implemented in this repository
+uses a shared three-layer residual MLP trained only on the current round and
+targets the mean anchor delta. Because the FedShift reruns were completed on
+the four main reported configurations, the direct FedShift comparisons in the
+results focus on those shared settings.
 
 \textbf{Reported configurations.}
 Table~\ref{tab:configs} summarizes the main settings referenced in the paper and

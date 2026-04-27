@@ -119,39 +119,46 @@ direction.
 \end{frame}
 
 \begin{frame}{Why Existing Fixes Are Not Enough}
-\footnotesize
+\small
 \begin{columns}[T,totalwidth=\textwidth]
 \column{0.48\textwidth}
-\textbf{FedAvg}
+\begin{block}{FedAvg}
 \begin{itemize}
-  \item No dequantization step at all.
-  \item Relies on client averaging to cancel quantization noise.
-  \item That assumption breaks hardest at INT2.
+  \item No correction step at all.
+  \item Assumes averaging cancels quantization noise; breaks hardest at INT2.
 \end{itemize}
+\end{block}
 
-\vspace{0.3em}
-\textbf{Simplified ProWD baseline}
+\vspace{0.2em}
+\begin{block}{FedShift}
 \begin{itemize}
-  \item Train a 3-layer residual MLP on the \emph{current round only}.
-  \item Pull every constrained client toward the \emph{mean} anchor delta.
-  \item No persistent replayed supervision across rounds.
+  \item One global anchor-based shift per round.
+  \item Strong near-IID baseline, but still one target for everyone.
 \end{itemize}
+\end{block}
 
 \column{0.48\textwidth}
-\textbf{What AGD-Smart changes}
+\begin{block}{ProWD}
 \begin{itemize}
-  \item Use full-precision clients as \textbf{direct supervision}.
-  \item Keep that supervision in a \textbf{replay buffer}.
-  \item Match each constrained client to a \textbf{relevant anchor target}.
-  \item Blend correction with the original delta when non-IID structure matters.
+  \item Learned residual MLP, but trained on the current round only.
+  \item Pulls every constrained client toward the same mean anchor target.
 \end{itemize}
+\end{block}
+
+\vspace{0.2em}
+\begin{block}{AGD-Smart}
+\begin{itemize}
+  \item Replay buffer plus direct anchor supervision.
+  \item Client-specific matching instead of one global target.
+  \item Blended correction when non-IID structure matters.
+\end{itemize}
+\end{block}
 \end{columns}
 
 \vspace{0.2em}
-\begin{alertblock}{Core idea}
-Learn a server-side corrector that turns a low-bit upload into a more
-full-precision-like upload using anchors as teachers.
-\end{alertblock}
+\centering
+\footnotesize AGD-Smart is the only variant that is both persistent and
+client-specific.
 \end{frame}
 
 \begin{frame}{Method Overview}
@@ -281,6 +288,7 @@ direction.
 \begin{block}{Baselines}
 \begin{itemize}
   \item FedAvg
+  \item FedShift
   \item Simplified ProWD baseline
 \end{itemize}
 \end{block}
@@ -310,26 +318,60 @@ machinery?
 \end{columns}
 \end{frame}
 
+\begin{frame}{FedShift Is the Closest Lightweight Baseline}
+\footnotesize
+\begin{columns}[T,totalwidth=\textwidth]
+\column{0.48\textwidth}
+\begin{block}{What FedShift does}
+\begin{itemize}
+  \item Estimate the round's anchor mean and quantized mean.
+  \item Shift uploads toward the anchor mean before aggregation.
+\end{itemize}
+\end{block}
+
+\vspace{0.2em}
+\begin{block}{Why it matters}
+\begin{itemize}
+  \item It adds real correction without any learned model.
+  \item It is stronger than ProWD in most near-IID settings.
+\end{itemize}
+\end{block}
+
+\column{0.48\textwidth}
+\begin{alertblock}{Main limitation}
+FedShift uses one \emph{global} anchor-driven shift. That works best when
+clients are near-IID and becomes too crude once client directions diverge.
+\end{alertblock}
+
+\vspace{0.2em}
+\begin{block}{Why AGD-Smart can go further}
+\begin{itemize}
+  \item client-specific matching,
+  \item persistent replay instead of round-by-round reset,
+  \item blended correction under non-IID data.
+\end{itemize}
+\end{block}
+\end{columns}
+\end{frame}
+
 \begin{frame}{Main Result: INT2 Is Where the Method Helps}
 \begin{columns}[T,totalwidth=\textwidth]
 \column{0.60\textwidth}
 \includegraphics[width=\linewidth]{int2_curve.png}
 
 \column{0.36\textwidth}
-\small
+\footnotesize
 \begin{block}{Setting}
-\small
 Near-IID CIFAR-10\\
-INT2 quantization\\
-20\% anchors\\
+INT2 quantization, 20\% anchors\\
 50 rounds
 \end{block}
 
-\textbf{Headline numbers}
-\begin{itemize}
-  \item R10: \textbf{58.2} vs 44.0 (FedAvg) and 57.3 (ProWD)
-  \item R50: \textbf{77.5} vs 75.4 (FedAvg) and 71.8 (ProWD)
-  \item Gain: \textbf{+14.2} at R10 and \textbf{+2.1} at R50 over FedAvg
+\textbf{FedShift / FedAvg / ProWD}
+\begin{itemize}\setlength{\itemsep}{0.15em}
+  \item R10: \textbf{58.2} vs 46.9 / 44.0 / 57.3
+  \item R50: \textbf{77.5} vs 77.4 / 75.4 / 71.8
+  \item Early edge: \textbf{+11.3} over FedShift
 \end{itemize}
 \end{columns}
 \end{frame}
@@ -363,35 +405,77 @@ INT2 quantization\\
 \end{columns}
 \end{frame}
 
+\begin{frame}{FedShift Comparison at Round 50}
+\small
+\begin{center}
+\resizebox{0.92\linewidth}{!}{%
+\begin{tabular}{lccccc}
+\toprule
+Setting & FedAvg & FedShift & ProWD & AGD-Smart \\
+\midrule
+Near-IID, INT2 & 75.4 & 77.4 & 71.8 & \textbf{77.5} \\
+Near-IID, INT8 & \textbf{82.7} & 81.1 & 79.3 & 81.2 \\
+Near-IID, INT4 & \textbf{83.2} & 80.7 & 77.7 & 82.5 \\
+Non-IID, INT8  & \textbf{80.4} & 73.8 & 72.8 & 74.8 \\
+\bottomrule
+\end{tabular}}
+\end{center}
+
+\vspace{0.6em}
+\begin{block}{Interpretation}
+This view is easier to read because it shows the actual endpoints. FedShift is
+usually stronger than ProWD, which makes it the more serious correction
+baseline, but AGD-Smart still recovers the best corrected score in INT2, INT4,
+and non-IID INT8. FedAvg remains strongest in the easier INT8 and INT4
+near-IID settings.
+\end{block}
+\end{frame}
+
+\begin{frame}{Where AGD-Smart Beats FedShift}
+\begin{center}
+\resizebox{0.92\linewidth}{!}{\input{figs/fedshift_gains.tex}}
+\end{center}
+
+\vspace{0.3em}
+\small
+\begin{itemize}
+  \item INT2 is the early-convergence story: AGD-Smart is up \textbf{+11.3} at round 10 even though the final scores nearly tie.
+  \item INT4 is the clearest end-of-training story: AGD-Smart finishes \textbf{+1.8} ahead.
+  \item Non-IID INT8 shows why smart matching matters: a single global shift is too coarse once client distributions diverge.
+\end{itemize}
+\end{frame}
+
 \begin{frame}{Other Regimes}
 \begin{columns}[T,totalwidth=\textwidth]
 \column{0.32\textwidth}
 \begin{block}{Near-IID, INT8}
 \footnotesize
-AGD-Smart reaches \textbf{81.2} at R50, beats ProWD by \textbf{+1.9}, and is
-slightly behind FedAvg at the end.
+AGD-Smart reaches \textbf{81.2} at R50, essentially ties FedShift at 81.1, and
+still trails FedAvg slightly at the end.
 \end{block}
 
 \column{0.32\textwidth}
 \begin{block}{Near-IID, INT4}
 \footnotesize
-AGD-Smart reaches \textbf{82.5} at R50, beats ProWD by \textbf{+4.8}, and
-nearly matches FedAvg.
+AGD-Smart reaches \textbf{82.5} at R50, beats FedShift by \textbf{+1.8}, and
+finishes within 0.7 of FedAvg.
 \end{block}
 
 \column{0.32\textwidth}
 \begin{block}{Non-IID, INT8}
 \footnotesize
-AGD-Smart reaches \textbf{75.3} at R50 and still beats ProWD by \textbf{+2.5},
-but FedAvg benefits from preserving client diversity.
+AGD-Smart reaches \textbf{74.8} at R50, beats FedShift by \textbf{+1.0}, but
+FedAvg still benefits from preserving client diversity.
 \end{block}
 \end{columns}
 
 \vspace{0.6em}
 \small
 \begin{center}
-Across all reported settings, the stable pattern is: \textbf{AGD-Smart $>$ ProWD},
-while \textbf{AGD-Smart $>$ FedAvg} only appears in the extreme INT2 regime.
+Across the shared settings, the stable pattern is:
+\textbf{AGD-Smart $\geq$ FedShift $>$ ProWD} under near-IID data, while
+\textbf{AGD-Smart $>$ FedShift} is more meaningful under INT4, INT2 early
+rounds, and non-IID data.
 \end{center}
 \end{frame}
 
@@ -401,7 +485,7 @@ It uses clean anchor-client updates to supervise a persistent server-side
 corrector for low-bit client deltas.
 \end{block}
 
-\begin{block}{Why it beats ProWD}
+\begin{block}{Why it beats ProWD and often FedShift}
 \begin{itemize}
   \item replayed supervision instead of round-by-round forgetting,
   \item client-specific smart matching instead of a single mean target,
@@ -411,8 +495,9 @@ corrector for low-bit client deltas.
 
 \begin{alertblock}{Main conclusion}
 This is not a universal replacement for FedAvg. It is a targeted fix for the
-regime where quantization is severe enough that averaging alone fails,
-especially INT2.
+regime where quantization is severe enough that averaging alone fails, and it
+stays most convincing when a simple global shift is not enough, especially
+INT2 early and non-IID data.
 \end{alertblock}
 \end{frame}
 
@@ -428,6 +513,14 @@ especially INT2.
   \item Seo et al. (2024), \emph{FedShift: Robust Federated Learning Aggregation Scheme in Resource Constrained Environment via Weight Shifting}.
   \item Chen and Vikalo (2024), \emph{Mixed-Precision Quantization for Federated Learning on Resource-Constrained Heterogeneous Devices}.
 \end{itemize}
+\end{frame}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{center}
+    {\LARGE\bfseries Questions?}
+  \end{center}
+  \vfill
 \end{frame}
 
 \end{document}
