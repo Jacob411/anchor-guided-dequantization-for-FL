@@ -1,0 +1,49 @@
+\providecommand{\methoddiagramfont}{\small}
+
+\begin{tikzpicture}[
+  >=Stealth,
+  font=\methoddiagramfont,
+  box/.style={
+    draw,
+    rounded corners=2.5pt,
+    align=center,
+    inner sep=4pt,
+    minimum height=9mm
+  },
+  model/.style={box, fill=black!5, draw=black!45, text width=2.5cm},
+  anchorbox/.style={box, fill=anchorblue!12, draw=anchorblue, text width=2.9cm},
+  quantbox/.style={box, fill=quantred!12, draw=quantred, text width=2.9cm},
+  serverbox/.style={box, fill=servergold!12, draw=servergold!80!black, text width=3.0cm},
+  bufferbox/.style={box, fill=buffergreen!12, draw=buffergreen!70!black, text width=3.0cm}
+]
+
+\node[model] (global) at (0, 0) {Global model};
+
+\node[anchorbox] (anchors) at (-5.4, -2.3) {Anchor clients\\full-precision uploads};
+\node[serverbox] (targets) at (0, -2.3) {Target matching\\mean anchor or nearest anchor};
+\node[quantbox] (quantized) at (5.4, -2.3) {Constrained clients\\low-bit uploads};
+
+\node[bufferbox] (replay) at (-3.8, -4.9) {Replay buffer\\keep recent supervision pairs};
+\node[serverbox] (corrnet) at (0, -4.9) {CorrectionNet\\residual MLP learns correction};
+\node[serverbox] (blend) at (3.8, -4.9) {Blend with original update\\before aggregation};
+
+\node[serverbox] (agg) at (0, -7.7) {Aggregate anchors and corrected uploads};
+\node[model] (next) at (5.5, -7.7) {Updated model};
+
+\coordinate (aggleft) at ([xshift=-0.8cm]agg.west);
+\coordinate (aggright) at ([xshift=0.8cm]agg.east);
+\coordinate (blenddrop) at (blend.south |- aggright);
+
+\draw[->, thick] (global.south west) -- (anchors.north);
+\draw[->, thick] (global.south east) -- (quantized.north);
+\draw[->, thick, anchorblue] (anchors.east) -- node[above, font=\footnotesize] {supervision} (targets.west);
+\draw[->, thick, quantred] (quantized.west) -- node[above, font=\footnotesize] {low-bit uploads} (targets.east);
+\draw[->, thick] (targets.south west) -- (replay.north east);
+\draw[->, thick] (replay.east) -- (corrnet.west);
+\draw[->, thick] (corrnet.east) -- (blend.west);
+\draw[->, thick] (blend.south) -- node[pos=0.45, right, font=\footnotesize] {corrected uploads} (blenddrop);
+\draw[->, thick] (blenddrop) -- (aggright) -- (agg.east);
+\draw[->, thick, anchorblue, dashed] (anchors.south) |- node[pos=0.74, below, font=\footnotesize] {anchor uploads} (aggleft) -- (agg.west);
+\draw[->, thick] (agg.east) -- (next.west);
+
+\end{tikzpicture}

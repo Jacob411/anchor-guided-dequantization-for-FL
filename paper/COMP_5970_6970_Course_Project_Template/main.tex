@@ -1,0 +1,121 @@
+\documentclass{article}
+
+
+% if you need to pass options to natbib, use, e.g.:
+%     \PassOptionsToPackage{numbers, compress}{natbib}
+% before loading neurips_2023
+
+
+% ready for submission
+% \usepackage{neurips_2023}
+
+% [preprint] option:
+\usepackage[preprint,nonatbib]{neurips_2024}
+
+
+% to compile a camera-ready version, add the [final] option, e.g.:
+% \usepackage{neurips_2024}
+
+
+% to avoid loading the natbib package, add option nonatbib:
+% \usepackage[nonatbib]{neurips_2024}
+\usepackage{enumitem}
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+% \usepackage{hyperref}       % hyperlinks
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+\usepackage{xcolor}         % colors
+% \newcommand{\ours}{\textsc{pFedHR}\xspace}
+\newcommand{\ours}{\texttt{NeuroGen}\xspace}
+\newcommand{\oursplus}{\texttt{NeuroGen}$^{+}$\xspace}
+\newcommand{\modelplus}{\texttt{pFedClub}$^{+}$}
+\newcommand{\model}{\texttt{pFedClub}}
+% personal add packages
+\usepackage{times}
+\usepackage{wrapfig}
+\usepackage{epsfig}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{xspace}
+\usepackage[linesnumbered,ruled,vlined]{algorithm2e}
+\usepackage{algpseudocode}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{subcaption}
+\usepackage{booktabs}
+% \usepackage{algpseudocode}
+\usepackage{xspace}
+\SetKwInput{Input}{Input}
+\SetKwProg{kwServer}{ServerUpdate}{:}{}
+\SetKwProg{kwClient}{ClientUpdate}{:}{}
+\newcommand{\wjq}[1]{\textcolor{blue}{\emph{[jq: #1]}}}
+
+
+
+\newcommand{\llv}[1]{\textbf{\textcolor{orange}{[llv: #1]}}}
+\newcommand{\jtnote}[1]{\textbf{\textcolor{olive}{[jt: #1]}}}
+\newcommand{\ys}[1]{\textcolor{brown}{\emph{[ys: #1]}}}
+\SetKwProg{kwServer}{\textcolor{blue}{Server Update}}{}{}
+\SetKwProg{kwClient}{\textcolor{blue}{Client Update}}{}{}
+\DeclareMathOperator*{\argmax}{arg\;max}
+\DeclareMathOperator*{\argmin}{arg\;min}
+% \newcommand{\ours}{\texttt{pFedClub}\xspace}
+\usepackage{makecell}
+\usepackage{bbm}
+\usepackage{wrapfig}
+\usepackage{graphicx}
+\usepackage{ifthen}
+\usepackage{xspace}
+\usepackage{upgreek}
+\usepackage{pifont}% http://ctan.org/pkg/pifont
+\newcommand{\cmark}{\ding{51}}%
+\newcommand{\xmark}{\ding{55}}%
+\usepackage{colortbl}
+\usepackage{cite}
+\usepackage{multirow}
+\usepackage{dsfont}
+\usepackage[numbers]{natbib} 
+
+\title{COMP 5970/6970 Course Project}
+
+
+\author{%
+  Jiaqi Wang$^{1}$;  
+  Harry Portter$^{2}$\\
+  $^1$Auburn University, 
+  $^2$Hogwarts School of Witchcraft and Wizardry\\
+  \texttt{jqwang@auburn.edu}, \texttt{Harry@HWW.edu}\\
+}
+
+
+
+
+
+
+\begin{document}
+
+
+\maketitle
+
+\begin{abstract}
+This is the abstract
+\end{abstract}
+
+
+\input{section/introduction.tex}
+\input{section/related_work.tex}
+\input{section/methodology.tex}
+\input{section/experiment.tex}
+\input{section/conclusion.tex}
+
+
+\bibliographystyle{unsrt}
+\bibliography{egbib}
+
+\end{document}
+

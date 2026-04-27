@@ -1,0 +1,93 @@
+\begin{thebibliography}{9}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[McMahan et~al.(2017)McMahan, Moore, Ramage, Hampson, and
+  Arcas]{mcmahan2017}
+Brendan McMahan, Eider Moore, Daniel Ramage, Seth Hampson, and Blaise Aguera~y
+  Arcas.
+\newblock Communication-efficient learning of deep networks from decentralized
+  data.
+\newblock In \emph{Proceedings of the 20th International Conference on
+  Artificial Intelligence and Statistics}, volume~54 of \emph{Proceedings of
+  Machine Learning Research}, pages 1273--1282. PMLR, 2017.
+\newblock URL \url{https://proceedings.mlr.press/v54/mcmahan17a.html}.
+
+\bibitem[Li et~al.(2020)Li, Sahu, Zaheer, Sanjabi, Talwalkar, and
+  Smith]{li2020fedprox}
+Tian Li, Anit~Kumar Sahu, Manzil Zaheer, Maziar Sanjabi, Ameet Talwalkar, and
+  Virginia Smith.
+\newblock Federated optimization in heterogeneous networks.
+\newblock In \emph{Proceedings of Machine Learning and Systems}, volume~2,
+  pages 429--450, 2020.
+\newblock URL
+  \url{https://proceedings.mlsys.org/paper_files/paper/2020/hash/1f5fe83998a09396ebe6477d9475ba0c-Abstract.html}.
+
+\bibitem[Karimireddy et~al.(2020)Karimireddy, Kale, Mohri, Reddi, Stich, and
+  Suresh]{karimireddy2020scaffold}
+Sai~Praneeth Karimireddy, Satyen Kale, Mehryar Mohri, Sashank Reddi, Sebastian
+  Stich, and Ananda~Theertha Suresh.
+\newblock Scaffold: Stochastic controlled averaging for federated learning.
+\newblock In \emph{Proceedings of the 37th International Conference on Machine
+  Learning}, volume 119 of \emph{Proceedings of Machine Learning Research},
+  pages 5132--5143. PMLR, 2020.
+\newblock URL \url{https://proceedings.mlr.press/v119/karimireddy20a.html}.
+
+\bibitem[Wang et~al.(2020)Wang, Liu, Liang, Joshi, and Poor]{wang2020fednova}
+Jianyu Wang, Qinghua Liu, Hao Liang, Gauri Joshi, and H.~Vincent Poor.
+\newblock Tackling the objective inconsistency problem in heterogeneous
+  federated optimization.
+\newblock In \emph{Advances in Neural Information Processing Systems 33}, pages
+  7611--7623, 2020.
+\newblock URL
+  \url{https://proceedings.neurips.cc/paper/2020/hash/564127c03caab942e503ee6f810f54fd-Abstract.html}.
+
+\bibitem[Yoon et~al.(2022)Yoon, Park, Jeong, and Hwang]{yoon2022prowd}
+Jaehong Yoon, Geon Park, Wonyong Jeong, and Sung~Ju Hwang.
+\newblock Bitwidth heterogeneous federated learning with progressive weight
+  dequantization.
+\newblock In \emph{Proceedings of the 39th International Conference on Machine
+  Learning}, volume 162 of \emph{Proceedings of Machine Learning Research},
+  pages 25552--25565. PMLR, 2022.
+\newblock URL \url{https://proceedings.mlr.press/v162/yoon22a.html}.
+
+\bibitem[Seo et~al.(2024)Seo, Kim, and Rong]{seo2024fedshift}
+Jungwon Seo, Minhoe Kim, and Chunming Rong.
+\newblock Fedshift: Robust federated learning aggregation scheme in resource
+  constrained environment via weight shifting.
+\newblock \emph{arXiv preprint arXiv:2402.01070}, 2024.
+\newblock URL \url{https://arxiv.org/abs/2402.01070}.
+
+\bibitem[Chen and Vikalo(2024)]{chen2024fedmpq}
+Huancheng Chen and Haris Vikalo.
+\newblock Mixed-precision quantization for federated learning on
+  resource-constrained heterogeneous devices.
+\newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision
+  and Pattern Recognition}, pages 6138--6148, 2024.
+\newblock URL \url{https://arxiv.org/abs/2311.18129}.
+
+\bibitem[Alistarh et~al.(2017)Alistarh, Grubic, Li, Tomioka, and
+  Vojnovic]{alistarh2017qsgd}
+Dan Alistarh, Demjan Grubic, Jerry Li, Ryota Tomioka, and Milan Vojnovic.
+\newblock Qsgd: Communication-efficient sgd via gradient quantization and
+  encoding.
+\newblock In \emph{Advances in Neural Information Processing Systems 30}, pages
+  1709--1720, 2017.
+\newblock URL
+  \url{https://papers.nips.cc/paper_files/paper/2017/hash/6c340f25839e6acdc73414517203f5f0-Abstract.html}.
+
+\bibitem[Reisizadeh et~al.(2020)Reisizadeh, Mokhtari, Hassani, Jadbabaie, and
+  Pedarsani]{reisizadeh2020fedpaq}
+Amirhossein Reisizadeh, Aryan Mokhtari, Hamed Hassani, Ali Jadbabaie, and
+  Ramtin Pedarsani.
+\newblock Fedpaq: A communication-efficient federated learning method with
+  periodic averaging and quantization.
+\newblock In \emph{Proceedings of the Twenty Third International Conference on
+  Artificial Intelligence and Statistics}, volume 108 of \emph{Proceedings of
+  Machine Learning Research}, pages 2021--2031. PMLR, 2020.
+\newblock URL \url{https://proceedings.mlr.press/v108/reisizadeh20a.html}.
+
+\end{thebibliography}

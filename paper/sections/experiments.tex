@@ -1,0 +1,55 @@
+\section{Experimental Setup}
+
+\textbf{Dataset and partitioning.}
+All reported experiments use CIFAR-10. Near-IID settings use a large Dirichlet
+concentration ($\alpha=100$), while the heterogeneous setting uses
+$\alpha=0.5$.
+
+\textbf{Model and local training.}
+Clients train a shared CNN for two local epochs per communication round. The
+server-side CorrectionNet uses hidden width 256.
+
+\textbf{Client types.}
+Each experiment uses 10 total clients with full participation. Anchor fractions
+range from 20\% to 50\%, depending on the configuration.
+
+\textbf{Baselines.}
+We compare against FedAvg \citep{mcmahan2017} and a simplified ProWD-style
+baseline derived from \citet{yoon2022prowd}. The simplified ProWD baseline
+implemented in this repository uses a shared three-layer residual MLP trained
+only on the current round and targets the mean anchor delta.
+
+\textbf{Reported configurations.}
+Table~\ref{tab:configs} summarizes the main settings referenced in the paper and
+slides.
+
+\begin{table}[h]
+  \centering
+  \caption{Reported experimental configurations.}
+  \label{tab:configs}
+  \small
+  \resizebox{0.95\columnwidth}{!}{%
+  \begin{tabular}{lccccc}
+    \toprule
+    Setting & $\alpha$ & Bits & Anchors & Rounds & Corr. epochs \\
+    \midrule
+    Near-IID ProWD benchmark & 100 & INT8 & 5 / 10 & 50 & 5 \\
+    Near-IID severe quant.   & 100 & INT2 & 2 / 10 & 50 & 20 \\
+    Near-IID moderate quant. & 100 & INT4 & 5 / 10 & 50 & 10 \\
+    Non-IID heterogeneous    & 0.5 & INT8 & 5 / 10 & 50 & 5 \\
+    \bottomrule
+  \end{tabular}}
+\end{table}
+
+This table is mainly an interpretation guide for the later accuracy results.
+The near-IID INT8 row is the easiest setting and is closest to the regime where
+plain averaging is already strong. The INT2 row is much harsher: only two
+anchors supervise eight constrained clients, and each coordinate is compressed
+to just three effective levels. Because the rows differ in both bit-width and
+anchor fraction, the most important comparisons are within each row across
+methods, while the cross-row trend tells us when correction becomes necessary.
+
+\textbf{Evaluation.}
+The primary metric is top-1 accuracy on the global CIFAR-10 test set at
+selected communication rounds. We focus on round 10 to measure early usefulness
+and round 50 to measure whether gains persist.
