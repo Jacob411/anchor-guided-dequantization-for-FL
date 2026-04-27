@@ -1,0 +1,44 @@
+\section{Introduction}
+
+Federated learning (FL) trains a shared model across many clients without
+centralizing raw data \citep{mcmahan2017}. In practice, however, participating
+devices are rarely homogeneous. A laptop-class client may upload a
+full-precision update, while an embedded device or phone may need INT8, INT4,
+or even INT2 quantization to fit its communication and memory budget. Once
+those updates are averaged together, quantization error no longer behaves like
+benign noise; it becomes a structured bias in the aggregated direction.
+
+This project studies a simple question: can a server learn to reverse some of
+that bias if a small subset of clients still provide clean, full-precision
+updates? We use those full-precision clients as \emph{anchors}. Their updates
+provide round-level supervision for a server-side CorrectionNet that maps a
+quantized delta toward a more full-precision-like delta before aggregation.
+
+That question sits at the intersection of two existing FL lines of work.
+Heterogeneity-aware optimizers such as FedProx, SCAFFOLD, and FedNova study how
+client drift and uneven local progress affect aggregation
+\citep{li2020fedprox,karimireddy2020scaffold,wang2020fednova}. Mixed-precision
+and bit-width-aware methods such as ProWD, FedShift, and recent client-specific
+quantization schemes instead focus on what happens when clients cannot all
+communicate at the same precision
+\citep{yoon2022prowd,seo2024fedshift,chen2024fedmpq}.
+
+The current implementation goes beyond a naive dequantizer in several ways.
+Instead of training on only the current round, it keeps a replay buffer over the
+most recent rounds. Instead of forcing every low-bit client toward the same
+anchor mean, it can assign each constrained client its most similar anchor by
+cosine similarity. It also supports an optional distillation term computed on a
+server validation set and blends corrected deltas with the original quantized
+delta to preserve client-specific direction under non-IID data.
+
+Our main contributions are:
+\begin{itemize}[leftmargin=*]
+  \item A template-based writeup of the implemented anchor-guided correction
+  pipeline, including warmup, replay buffering, smart matching, normalization,
+  and optional similarity-aware aggregation.
+  \item A reusable architecture diagram that makes the per-round data flow and
+  supervision path explicit.
+  \item An empirical summary showing that the method is most useful in the
+  severe quantization regime, especially INT2, while still improving over the
+  simplified ProWD baseline in every reported configuration.
+\end{itemize}

@@ -1,0 +1,36 @@
+\section{Related Work}
+
+FedAvg remains the standard FL baseline because of its simplicity and strong
+performance when client updates are already directionally compatible
+\citep{mcmahan2017}. Later optimization work made the heterogeneity problem more
+explicit. FedProx adds proximal regularization to stabilize training when local
+objectives and available local work differ across clients \citep{li2020fedprox}.
+SCAFFOLD corrects client drift with control variates
+\citep{karimireddy2020scaffold}, while FedNova analyzes objective inconsistency
+under unequal local progress and fixes it through normalized aggregation
+\citep{wang2020fednova}. These methods are important context because they show
+that even before quantization, federated aggregation is already sensitive to
+client mismatch.
+
+Communication-efficient learning introduces another axis: compression. QSGD is
+an influential quantized optimization method in distributed training
+\citep{alistarh2017qsgd}, and FedPAQ brings periodic averaging plus quantized
+message passing into the FL setting \citep{reisizadeh2020fedpaq}. More recent
+work pushes this further toward resource-aware mixed precision. For example,
+Chen and Vikalo propose client-specific mixed-precision quantization for
+resource-constrained heterogeneous devices \citep{chen2024fedmpq}. Those papers
+primarily study how to train and communicate efficiently under low precision,
+whereas this project focuses on repairing the low-bit uploads after they arrive
+at the server.
+
+The closest prior work is ProWD, which explicitly targets bit-width
+heterogeneous FL through a server-side dequantizer
+\citep{yoon2022prowd}. FedShift addresses the same mixed-precision aggregation
+problem from a different angle by using weight shifting to align client updates
+before aggregation \citep{seo2024fedshift}. Our implementation sits in this
+same mixed-precision corridor, but it differs in three practical ways: it uses
+full-precision anchor clients as direct supervision, it trains the corrector on
+a replayed history instead of only the current round, and it uses smart
+client-to-anchor matching rather than a single global target. The result should
+therefore be read as a server-side, anchor-supervised dequantization variant
+positioned between plain FedAvg and recent mixed-precision correction methods.

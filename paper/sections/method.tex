@@ -1,0 +1,81 @@
+\section{Method}
+
+\subsection{Setting}
+
+At each communication round, the server broadcasts the current global model to
+all clients. Anchor clients return full-precision updates, while constrained
+clients return low-bit quantized updates. The server's job is to repair the
+constrained uploads before aggregation without disturbing the clean anchor
+signal.
+
+\begin{figure*}[t]
+  \centering
+  {\def\methoddiagramfont{\normalsize}%
+  \resizebox{0.99\textwidth}{!}{\input{figs/method_architecture.tex}}}
+  \caption{Implemented round-level pipeline for anchor-guided dequantization.
+  Full-precision anchor clients supervise a server-side correction model. The
+  server matches constrained uploads to anchor targets, reuses recent
+  supervision through a replay buffer, applies a learned correction, blends it
+  with the original low-bit update, and aggregates the repaired uploads with
+  the anchors.}
+  \label{fig:method_architecture}
+\end{figure*}
+
+\subsection{Target Construction}
+
+The correction module operates only on \emph{learnable} parameters. BatchNorm
+running statistics bypass the correction path unchanged. Each client delta is
+flattened into a single vector before training the corrector.
+
+Two target modes are implemented. In the simpler version, every constrained
+client is trained toward the mean anchor update for that round. In the smart
+matching version, each constrained client is paired with the anchor whose update
+has the highest cosine similarity. The smart-matching version is the one
+reported as \method.
+
+\subsection{Correction Network and Replay Buffer}
+
+The server trains a residual MLP, CorrectionNet, on pairs of quantized uploads
+and anchor-derived targets. The network uses one encoder layer, three residual
+blocks, and a zero-initialized decoder so that it starts close to the identity
+map and only has to learn a correction rather than a full replacement update.
+
+Instead of training only on the current round, the server appends each new
+mini-batch of supervision pairs to a replay buffer capped at the most recent 10
+rounds. All buffered pairs are concatenated for training. Before the correction
+update, buffered quantized deltas are normalized with a single scalar
+$z$-score computed across the buffer so that the network sees a more stable
+input scale from round to round.
+
+\subsection{Training Objective}
+
+The base training signal is a reconstruction loss that pushes corrected uploads
+toward their anchor-derived targets. When a server validation loader is
+available, the implementation can also add a distillation term. In that case,
+the current global model acts as the teacher, and the corrected update is also
+encouraged to produce similar logits on the validation split.
+
+The teacher logits come from the current global model on the validation split.
+The student logits come from a model built by applying the mean corrected delta
+from the current round. The reported configurations use distillation
+temperature $\tau=4$.
+
+\subsection{Applying Correction and Aggregation}
+
+At inference time, the server denormalizes the network output and can blend the
+corrected upload with the original quantized upload. The main smart-matching
+configuration uses an 80/20 mix of corrected and original update, which helps
+preserve client-specific direction under non-IID data.
+
+The corrected deltas are then aggregated together with anchor deltas. The code
+supports either plain sample-count weighting or a convex combination of
+sample-count and cosine-similarity weights relative to the mean anchor delta.
+Finally, the aggregated update is applied to the global model.
+
+\subsection{Warmup}
+
+The smart-matching strategy also uses a warmup phase. For the first five rounds,
+the server trains the CorrectionNet and fills the replay buffer but still
+aggregates the raw client deltas with FedAvg. Correction is only applied after
+the buffer contains enough supervision signal to avoid harming early
+optimization.

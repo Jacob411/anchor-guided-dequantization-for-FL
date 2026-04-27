@@ -1,0 +1,15 @@
+\section{Conclusion}
+
+Using the provided course template, this paper reframes the project as a
+server-side correction pipeline for bit-width-heterogeneous federated learning.
+The central result is not that correction universally beats FedAvg. It does not.
+Instead, the evidence points to a narrower and more useful claim: anchor-guided
+correction is most valuable when quantization is so aggressive that averaging
+cannot reliably reconstruct the true direction of the update.
+
+In that regime, especially INT2, \method provides substantial early-round and
+end-of-training gains while remaining consistently stronger than the simplified
+ProWD baseline in every reported configuration. The reusable method diagram and
+the revised slides emphasize the practical mechanics that drive that result:
+anchor supervision, replay buffering, smart matching, warmup, and blended
+correction.

@@ -1,0 +1,144 @@
+\section{Results}
+
+\subsection{Main Result: INT2 Is the Regime Where Correction Matters}
+
+Figure~\ref{fig:int2_curve} shows the strongest result in the project: near-IID
+CIFAR-10 with INT2 quantization and only 20\% anchors. This is the regime where
+plain averaging struggles most because each uploaded coordinate has only three
+effective levels.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\columnwidth]{int2_curve.png}
+  \caption{INT2 near-IID benchmark over 50 rounds. \method gains sharply after
+  warmup and stays ahead of FedAvg throughout the full run.}
+  \label{fig:int2_curve}
+\end{figure}
+
+\begin{table}[h]
+  \centering
+  \caption{INT2 near-IID checkpoints (\%).}
+  \label{tab:int2_checkpoints}
+  \begingroup
+  \footnotesize
+  \setlength{\tabcolsep}{5pt}
+  \begin{tabular}{lcccc}
+    \toprule
+    Method & R10 & R20 & R30 & R50 \\
+    \midrule
+    FedAvg                    & 44.0 & 64.9 & 70.2 & 75.4 \\
+    ProWD                     & 57.3 & 67.0 & 68.5 & 71.8 \\
+    \textbf{\method}          & \textbf{58.2} & \textbf{70.2} & \textbf{75.3} & \textbf{77.5} \\
+    \bottomrule
+  \end{tabular}
+  \endgroup
+\end{table}
+
+Table~\ref{tab:int2_checkpoints} shows that \method is the best method at every
+reported checkpoint, not just at the end. It starts only slightly above ProWD
+at round 10 (+0.9), but the gap widens to +3.2 at round 20, +6.8 at round 30,
+and +5.7 at round 50. That widening margin matters because both learned
+correction methods use the same anchor idea; the extra gain is coming from the
+smarter matching, replay buffer, and blended correction pipeline rather than
+from warmup alone. Against FedAvg, the +14.2 advantage at round 10 shows that
+correction removes the most damaging quantization bias early, while the final
++2.1 margin shows the method is improving the end model as well, not just the
+speed of convergence.
+
+\subsection{Noise Scaling}
+
+Table~\ref{tab:noise_scaling} shows that the method's value is highly dependent
+on quantization severity. Once the bit-width rises to INT3 or above, FedAvg is
+usually good enough. The correction pipeline becomes most valuable when the
+quantized representation collapses too much directional information.
+
+\begin{table}[h]
+  \centering
+  \caption{Round-20 accuracy under different near-IID bit-widths with 20\%
+  anchors.}
+  \label{tab:noise_scaling}
+  \small
+  \resizebox{0.95\columnwidth}{!}{%
+  \begin{tabular}{lccccc}
+    \toprule
+    Bits & Levels & FedAvg & ProWD & \method & vs. FedAvg \\
+    \midrule
+    INT8 & 255 & 72.0 & 66.4 & 68.2 & $-3.9$ \\
+    INT6 & 63  & 73.0 & 68.3 & 70.7 & $-2.2$ \\
+    INT4 & 15  & 74.5 & 65.4 & 72.8 & $-1.7$ \\
+    INT3 & 7   & 74.4 & 65.8 & 71.7 & $-2.8$ \\
+    INT2 & 3   & 65.4 & 59.8 & \textbf{70.7} & \textbf{+5.3} \\
+    \bottomrule
+  \end{tabular}}
+\end{table}
+
+Table~\ref{tab:noise_scaling} makes the crossover point very clear. Compared
+with ProWD, \method wins at every bit-width, from +1.8 points at INT8 up to
++10.9 points at INT2, so the improved correction design is consistently better
+than the simpler learned baseline. Compared with FedAvg, however, the sign of
+the gain flips with quantization severity: \method is still 1.7--3.9 points
+behind from INT8 through INT3, then jumps to a +5.3 advantage at INT2. That
+pattern supports the main claim of the paper. Learned dequantization is not
+universally necessary, but it becomes valuable once the quantizer is coarse
+enough that plain averaging cannot preserve update direction.
+
+\subsection{Behavior in Milder Regimes}
+
+Figure~\ref{fig:other_curves} summarizes the remaining reported settings. The
+pattern is consistent: \method reliably beats ProWD, but it only surpasses
+FedAvg once quantization is severe enough that averaging alone can no longer
+recover the signal.
+
+\begin{figure*}[t]
+  \centering
+  \begin{subfigure}{0.32\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{int8_curve.png}
+    \caption{Near-IID, INT8}
+  \end{subfigure}\hfill
+  \begin{subfigure}{0.32\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{int4_curve.png}
+    \caption{Near-IID, INT4}
+  \end{subfigure}\hfill
+  \begin{subfigure}{0.32\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{noniid_curve.png}
+    \caption{Non-IID, INT8}
+  \end{subfigure}
+  \caption{Secondary regimes. The method stays consistently above ProWD, nearly
+  matches FedAvg under near-IID INT4, and narrows the gap to FedAvg under
+  non-IID INT8 without fully closing it.}
+  \label{fig:other_curves}
+\end{figure*}
+
+\begin{table*}[t]
+  \centering
+  \caption{Summary across reported configurations.}
+  \label{tab:summary}
+  \small
+  \resizebox{0.95\textwidth}{!}{%
+  \begin{tabular}{lcccc}
+    \toprule
+    Setting & \method @ R10 & \method @ R50 & vs. ProWD @ R50 & vs. FedAvg @ R50 \\
+    \midrule
+    Near-IID, INT2, 20\% anchors & 58.2 & 77.5 & +5.7 & +2.1 \\
+    Near-IID, INT8, 50\% anchors & 67.6 & 81.2 & +1.9 & -1.5 \\
+    Near-IID, INT4, 50\% anchors & 67.5 & 82.5 & +4.8 & -0.7 \\
+    Non-IID, INT8, 50\% anchors  & 59.2 & 75.3 & +2.5 & -5.1 \\
+    \bottomrule
+  \end{tabular}}
+\end{table*}
+
+Table~\ref{tab:summary} collects the regime-level comparison. The near-IID INT8
+row is the clearest example of a setting where \method is helpful but not
+strictly needed: it improves on ProWD by +1.9 at round 50, yet it still trails
+FedAvg by 1.5 because the uploaded updates are already compatible enough for
+simple averaging. INT4 shifts the balance slightly in favor of correction: the
+method beats ProWD by +4.8 and finishes only 0.7 behind FedAvg. INT2 is the
+decisive case, since it is the only row where \method beats both baselines at
+the end and also produces the strongest round-10 result. The non-IID INT8 row
+shows the main limitation. \method still outperforms ProWD by +2.5, but it
+remains 5.1 points behind FedAvg, which suggests that anchor-guided correction
+can wash out useful client-specific variation when data heterogeneity, rather
+than quantization alone, is the dominant source of mismatch.

@@ -1,8 +1,13 @@
-all: main.pdf
+LATEXMK=latexmk -pdf -interaction=nonstopmode -halt-on-error
+
+all: main.pdf slides.pdf
 
 main.pdf: main.tex
-	pdflatex -interaction=nonstopmode main.tex
-	pdflatex -interaction=nonstopmode main.tex
+	$(LATEXMK) main.tex
+
+slides.pdf: slides.tex
+	$(LATEXMK) slides.tex
 
 clean:
-	rm -f main.aux main.log main.out main.toc main.pdf
+	latexmk -C main.tex
+	latexmk -C slides.tex
