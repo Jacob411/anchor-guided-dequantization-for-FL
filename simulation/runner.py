@@ -113,9 +113,16 @@ class OurStrategy:
     """Anchor-guided CorrectionNet + score-based selective aggregation."""
     name = "ours"
 
-    def __init__(self, correction: ServerCorrection, similarity_weight: float = 0.5) -> None:
+    def __init__(
+        self,
+        correction: ServerCorrection,
+        similarity_weight: float = 0.5,
+        warmup_rounds: int = 0,
+    ) -> None:
         self.correction = correction
         self.sim_weight = similarity_weight
+        self.warmup_rounds = warmup_rounds
+        self._round = 0
 
     def aggregate(
         self,
@@ -127,6 +134,16 @@ class OurStrategy:
         global_model=None,
         val_loader=None,
     ):
+        self._round += 1
+
+        # Warmup: train CorrectionNet to build replay buffer but use FedAvg aggregation
+        # so the untrained net doesn't degrade accuracy in early rounds.
+        if self._round <= self.warmup_rounds:
+            self.correction.train(quantized_deltas, anchor_deltas, global_model, val_loader)
+            counts = sample_counts if sample_counts else [1.0] * len(all_deltas)
+            agg_delta = fedavg(all_deltas, counts)
+            return apply_delta(global_state, agg_delta), 0.0
+
         # 1. Train CorrectionNet
         corr_loss = self.correction.train(
             quantized_deltas, anchor_deltas, global_model, val_loader
@@ -212,8 +229,9 @@ def run(args: argparse.Namespace) -> None:
             temperature  = lcfg["distillation_temperature"],
             device       = device,
             smart_match  = True,
+            blend_factor = 0.8,
         )
-        strategy = OurStrategy(correction, similarity_weight=0.5)
+        strategy = OurStrategy(correction, similarity_weight=0.0, warmup_rounds=5)
 
     elif strategy_name == "fedavg":
         strategy = FedAvgStrategy()  # type: ignore[assignment]

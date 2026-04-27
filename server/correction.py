@@ -98,12 +98,14 @@ class ServerCorrection:
         grad_clip: float = 1.0,
         buffer_size: int = 10,
         smart_match: bool = False,
+        blend_factor: float = 1.0,
     ) -> None:
         self.device = device or torch.device("cpu")
         self.epochs = epochs
         self.grad_clip = grad_clip
         self.smart_match = smart_match
 
+        self.blend_factor = blend_factor  # 1.0 = full correction; <1 preserves original direction
         self.net = CorrectionNet(delta_dim, hidden_dim).to(self.device)
         self.optimizer = optim.Adam(self.net.parameters(), lr=lr)
         self.criterion = CombinedCorrectionLoss(rec_weight, distill_weight, temperature)
@@ -251,6 +253,10 @@ class ServerCorrection:
                 corrected_flat = corrected_norm * self._norm_std + self._norm_mean
             else:
                 corrected_flat = self.net(flat)
+            # Blend corrected output with original to preserve client-specific direction.
+            # blend_factor=1.0 → full correction; blend_factor<1 preserves direction.
+            if self.blend_factor < 1.0:
+                corrected_flat = self.blend_factor * corrected_flat + (1.0 - self.blend_factor) * flat
             corrected_flat = corrected_flat.cpu()
         return _unflatten_delta_learnable(corrected_flat, quantized_delta)
 

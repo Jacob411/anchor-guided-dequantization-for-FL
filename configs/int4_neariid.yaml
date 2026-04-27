@@ -1,0 +1,39 @@
+experiment:
+  name: "int4_neariid"
+  seed: 42
+
+federation:
+  num_clients: 10
+  num_rounds: 50
+  fraction_fit: 1.0
+  anchor_fraction: 0.5       # 5 FP32 anchors, 5 INT4 constrained
+
+client:
+  local_epochs: 2
+  local_lr: 0.01
+  local_momentum: 0.9
+  local_batch_size: 50
+  quantization_bits: [4]     # INT4 only — high quantization noise, strong test for CorrectionNet
+
+server:
+  correction_lr: 0.01
+  correction_epochs: 10      # more inner steps per round given higher noise
+  correction_hidden_dim: 256
+  validation_size: 500
+
+data:
+  dataset: "cifar10"
+  data_dir: "./data/raw"
+  alpha: 100                 # near-IID — clients have similar distributions
+
+model:
+  arch: "cnn"
+
+loss:
+  reconstruction_weight: 1.0
+  distillation_weight: 1.0
+  distillation_temperature: 4.0
+
+metrics:
+  output_dir: "./results"
+  log_every_n_rounds: 1

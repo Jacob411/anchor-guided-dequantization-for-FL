@@ -11,7 +11,9 @@ from typing import Tuple
 
 BITS_PER_ELEMENT = {
     2:  2,
+    3:  3,
     4:  4,
+    6:  6,
     8:  8,
     16: 16,
     32: 32,   # full precision sentinel
